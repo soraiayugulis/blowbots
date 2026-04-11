@@ -1,0 +1,15 @@
+{
+  "id": "checkerboard-pattern-hard",
+  "name": "Checkerboard",
+  "difficulty": "hard",
+  "grid": [
+    [{"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}],
+    [{"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "green", "count": 1}, {"color": "orange", "count": 1}, {"color": "green", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}],
+    [{"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "orange", "count": 1}, {"color": "purple", "count": 1}, {"color": "orange", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "green", "count": 1}, {"color": "orange", "count": 1}, {"color": "green", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}],
+    [{"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}, {"color": "red", "count": 1}, {"color": "yellow", "count": 1}],
+    [{"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}, {"color": "yellow", "count": 1}, {"color": "blue", "count": 1}]
+  ]
+}

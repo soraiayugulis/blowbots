@@ -1,5 +1,9 @@
 import xPatternEasy from './levels/x-pattern-easy.json';
 import squarePatternNormal from './levels/square-pattern-normal.json';
+import diamondPatternNormal from './levels/diamond-pattern-normal.json';
+import crossPatternNormal from './levels/cross-pattern-normal.json';
+import spiralPatternHard from './levels/spiral-pattern-hard.json';
+import checkerboardPatternHard from './levels/checkerboard-pattern-hard.json';
 import { RLERow } from '@core/algorithms/rle-expander';
 import { Difficulty } from './difficulty.config';
 
@@ -13,6 +17,10 @@ export interface LevelConfig {
 const LEVELS: LevelConfig[] = [
   xPatternEasy as LevelConfig,
   squarePatternNormal as LevelConfig,
+  diamondPatternNormal as LevelConfig,
+  crossPatternNormal as LevelConfig,
+  spiralPatternHard as LevelConfig,
+  checkerboardPatternHard as LevelConfig,
 ];
 
 export function getLevels(): LevelConfig[] {
