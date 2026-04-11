@@ -27,6 +27,4 @@ npm run dev
 npm run test
 ```
 
-## License
-
-MIT
+@soraiayugulis

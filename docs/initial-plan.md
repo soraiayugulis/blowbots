@@ -276,4 +276,3 @@ blowbots/
 - **Constant speed**: belt speed never changes across difficulties
 - **Shot invariant**: total shots always equals total blocks (guaranteed solvable)
 - **No persistence**: no save state, score is session-only
-- **All code in English**, chat in Portuguese

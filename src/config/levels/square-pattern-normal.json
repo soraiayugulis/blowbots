@@ -1,0 +1,12 @@
+{
+  "id": "square-pattern-normal",
+  "name": "Square Pattern",
+  "difficulty": "normal",
+  "grid": [
+    [{"color": "red", "count": 5}],
+    [{"color": "red", "count": 1}, {"color": "blue", "count": 3}, {"color": "red", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "blue", "count": 1}, {"color": "green", "count": 1}, {"color": "blue", "count": 1}, {"color": "red", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "blue", "count": 3}, {"color": "red", "count": 1}],
+    [{"color": "red", "count": 5}]
+  ]
+}
