@@ -3,8 +3,8 @@
   "name": "X Pattern",
   "difficulty": "easy",
   "grid": [
-    [{"color": "red", "count": 3}],
-    [{"color": "red", "count": 1}, {"color": "blue", "count": 1}, {"color": "red", "count": 1}],
-    [{"color": "red", "count": 3}]
+    [{"color": "red", "count": 1}, {"color": "green", "count": 1}, {"color": "red", "count": 1}],
+    [{"color": "blue", "count": 1}, {"color": "red", "count": 1}, {"color": "blue", "count": 1}],
+    [{"color": "red", "count": 1}, {"color": "green", "count": 1}, {"color": "red", "count": 1}]
   ]
 }

@@ -46,4 +46,18 @@ export class BoundedQueue<T> {
   getCapacity(): number {
     return this.capacity;
   }
+
+  getAt(index: number): T | null {
+    if (index < 0 || index >= this.items.length) {
+      return null;
+    }
+    return this.items[index];
+  }
+
+  removeAt(index: number): T | null {
+    if (index < 0 || index >= this.items.length) {
+      return null;
+    }
+    return this.items.splice(index, 1)[0] ?? null;
+  }
 }
