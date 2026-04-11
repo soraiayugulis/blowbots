@@ -1,0 +1,12 @@
+{
+  "id": "cross-pattern-normal",
+  "name": "Cross",
+  "difficulty": "normal",
+  "grid": [
+    [{"color": "green", "count": 2}, {"color": "red", "count": 1}, {"color": "yellow", "count": 2}],
+    [{"color": "purple", "count": 2}, {"color": "red", "count": 1}, {"color": "orange", "count": 2}],
+    [{"color": "red", "count": 5}],
+    [{"color": "orange", "count": 2}, {"color": "red", "count": 1}, {"color": "purple", "count": 2}],
+    [{"color": "yellow", "count": 2}, {"color": "red", "count": 1}, {"color": "green", "count": 2}]
+  ]
+}
