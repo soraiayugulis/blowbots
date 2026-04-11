@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { ShotbotDistributor } from '@core/algorithms/shotbot-distributor';
 import { Color } from '@core/models/color';
 import { Shotbot, ShotbotState } from '@core/models/shotbot';
-import { Queue } from '@core/data-structures/queue';
 
 describe('ShotbotDistributor', () => {
   it('should distribute shots into shotbots with exact division', () => {

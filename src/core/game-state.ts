@@ -83,7 +83,11 @@ export class GameState {
   }
 
   selectFromUsed(): Shotbot | null {
-    const shotbot = this.usedQueue.dequeue();
+    return this.selectFromUsedAt(0);
+  }
+
+  selectFromUsedAt(index: number): Shotbot | null {
+    const shotbot = this.usedQueue.removeAt(index);
     if (shotbot === null) {
       return null;
     }
@@ -137,6 +141,11 @@ export class GameState {
     this.activeShotbot.shots--;
     this.lastShotTarget = targetPos;
     this.score++;
+
+    if (this.activeShotbot.shots === 0) {
+      this.deactivateShotbot();
+    }
+
     return true;
   }
 
@@ -144,7 +153,7 @@ export class GameState {
     return this.pixelGrid.isCleared();
   }
 
-  private completeBeltLoop(): void {
+  private deactivateShotbot(): void {
     if (this.activeShotbot === null) {
       return;
     }
@@ -156,5 +165,9 @@ export class GameState {
 
     this.activeShotbot = null;
     this.activeShotbotBeltIndex = null;
+  }
+
+  private completeBeltLoop(): void {
+    this.deactivateShotbot();
   }
 }

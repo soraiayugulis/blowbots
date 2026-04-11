@@ -15,7 +15,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     gridSize: 3,
     shotUnit: 2,
     numWaitingQueues: 3,
-    usedQueueCapacity: 5,
+    usedQueueCapacity: 3,
     beltSpeed: 1000,
   },
   normal: {
@@ -23,7 +23,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     gridSize: 5,
     shotUnit: 5,
     numWaitingQueues: 3,
-    usedQueueCapacity: 5,
+    usedQueueCapacity: 3,
     beltSpeed: 1000,
   },
   hard: {
@@ -31,7 +31,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     gridSize: 10,
     shotUnit: 10,
     numWaitingQueues: 4,
-    usedQueueCapacity: 5,
+    usedQueueCapacity: 3,
     beltSpeed: 1000,
   },
 };
