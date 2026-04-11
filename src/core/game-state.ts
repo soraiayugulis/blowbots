@@ -16,6 +16,12 @@ export interface ActiveShotbotEntry {
   startIndex: number;
 }
 
+export interface ShootResult {
+  shotbot: Shotbot;
+  didShoot: boolean;
+  target: Position | null;
+}
+
 export class GameState {
   private pixelGrid: PixelGrid;
   private conveyorBelt: ConveyorBelt;
@@ -220,19 +226,23 @@ export class GameState {
   tryShoot(): boolean {
     // Legacy: shoot with first active shotbot
     if (this.activeEntries.length === 0) return false;
-    return this.tryShootEntry(this.activeEntries[0]);
+    return this.tryShootEntry(this.activeEntries[0]).didShoot;
   }
 
   tryShootAll(): boolean[] {
-    const results: boolean[] = [];
+    return this.tryShootAllWithTargets().map(r => r.didShoot);
+  }
+
+  tryShootAllWithTargets(): ShootResult[] {
+    const results: ShootResult[] = [];
     const toRemove: number[] = [];
 
     for (let i = 0; i < this.activeEntries.length; i++) {
       const entry = this.activeEntries[i];
-      const didShoot = this.tryShootEntry(entry);
-      results.push(didShoot);
+      const shootResult = this.tryShootEntry(entry);
+      results.push({ shotbot: entry.shotbot, didShoot: shootResult.didShoot, target: shootResult.target });
 
-      if (entry.shotbot.shots === 0) {
+      if (shootResult.didShoot && entry.shotbot.shots === 0) {
         toRemove.push(i);
       }
     }
@@ -247,24 +257,24 @@ export class GameState {
     return results;
   }
 
-  private tryShootEntry(entry: ActiveShotbotEntry): boolean {
+  private tryShootEntry(entry: ActiveShotbotEntry): { didShoot: boolean; target: Position | null } {
     const beltPos = this.conveyorBelt.getPosition(entry.beltIndex);
     if (beltPos === null) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
     const targetPos = LineOfSight.findNearestEdgeBlock(beltPos, this.pixelGrid.getGrid());
     if (targetPos === null) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
     const targetColor = this.pixelGrid.getBlock(targetPos.x, targetPos.y);
     if (targetColor !== entry.shotbot.color) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
     if (entry.shotbot.shots <= 0) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
     this.pixelGrid.removeBlock(targetPos.x, targetPos.y);
@@ -272,7 +282,7 @@ export class GameState {
     this.lastShotTarget = targetPos;
     this.score++;
 
-    return true;
+    return { didShoot: true, target: targetPos };
   }
 
   isWon(): boolean {

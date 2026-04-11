@@ -3,6 +3,7 @@ import { GameState, ActiveShotbotEntry } from '@core/game-state';
 import { LevelConfig } from '@config/levels';
 import { DifficultyConfig } from '@config/difficulty.config';
 import { Shotbot } from '@core/models/shotbot';
+import { Position } from '@core/models/position';
 
 const COLOR_MAP: Record<string, number> = {
   red: 0xe94560,
@@ -470,13 +471,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBeltStep(): void {
-    const shootResults = this.gameState.tryShootAll();
-    const entries = this.gameState.getActiveShotbots();
+    const shootResults = this.gameState.tryShootAllWithTargets();
 
-    // Show shoot effects for each shotbot that fired
-    for (let i = 0; i < shootResults.length; i++) {
-      if (shootResults[i] && entries[i]) {
-        this.showShootEffectFor(entries[i]);
+    // Show shoot effects for each shotbot that fired (using its own target)
+    for (const result of shootResults) {
+      if (result.didShoot && result.target) {
+        const entry = this.gameState.getActiveShotbots().find(e => e.shotbot === result.shotbot);
+        if (entry) {
+          this.showShootEffectFor(entry, result.target);
+        }
       }
     }
 
@@ -559,10 +562,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private showShootEffectFor(entry: ActiveShotbotEntry): void {
-    const target = this.gameState.getLastShotTarget();
-    if (!target) return;
-
+  private showShootEffectFor(entry: ActiveShotbotEntry, target: Position): void {
     const shotbot = entry.shotbot;
     const beltPos = this.gameState.getConveyorBelt().getPosition(entry.beltIndex);
     const grid = this.gameState.getPixelGrid();
