@@ -7,6 +7,7 @@ import { ConveyorBelt } from './conveyor-belt';
 import { BoundedQueue } from './data-structures/bounded-queue';
 import { Queue } from './data-structures/queue';
 import { Shotbot, ShotbotState } from './models/shotbot';
+import { Position } from './models/position';
 import { DifficultyConfig } from '../config/difficulty.config';
 
 export class GameState {
@@ -16,6 +17,7 @@ export class GameState {
   private usedQueue: BoundedQueue<Shotbot>;
   private activeShotbot: Shotbot | null = null;
   private activeShotbotBeltIndex: number | null = null;
+  private lastShotTarget: Position | null = null;
   private score: number = 0;
 
   constructor(rleGrid: RLERow[][], config: DifficultyConfig) {
@@ -54,6 +56,10 @@ export class GameState {
 
   getScore(): number {
     return this.score;
+  }
+
+  getLastShotTarget(): Position | null {
+    return this.lastShotTarget;
   }
 
   selectFromWaiting(queueIndex: number): Shotbot | null {
@@ -129,6 +135,7 @@ export class GameState {
 
     this.pixelGrid.removeBlock(targetPos.x, targetPos.y);
     this.activeShotbot.shots--;
+    this.lastShotTarget = targetPos;
     this.score++;
     return true;
   }
