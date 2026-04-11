@@ -10,15 +10,24 @@ import { Shotbot, ShotbotState } from './models/shotbot';
 import { Position } from './models/position';
 import { DifficultyConfig } from '../config/difficulty.config';
 
+export interface ActiveShotbotEntry {
+  shotbot: Shotbot;
+  beltIndex: number;
+  startIndex: number;
+}
+
 export class GameState {
   private pixelGrid: PixelGrid;
   private conveyorBelt: ConveyorBelt;
   private waitingQueues: Queue<Shotbot>[];
   private usedQueue: BoundedQueue<Shotbot>;
-  private activeShotbot: Shotbot | null = null;
-  private activeShotbotBeltIndex: number | null = null;
+  private activeEntries: ActiveShotbotEntry[] = [];
+  private pendingShotbots: Shotbot[] = [];
   private lastShotTarget: Position | null = null;
   private score: number = 0;
+
+  private static readonly MAX_ACTIVE_SHOTBOTS = 3;
+  private static readonly MIN_GAP = 2; // minimum positions between shotbots
 
   constructor(rleGrid: RLERow[][], config: DifficultyConfig) {
     this.pixelGrid = new PixelGrid(rleGrid);
@@ -46,12 +55,21 @@ export class GameState {
     return this.usedQueue;
   }
 
+  // Legacy single-shotbot accessors (for backward compat)
   getActiveShotbot(): Shotbot | null {
-    return this.activeShotbot;
+    return this.activeEntries.length > 0 ? this.activeEntries[0].shotbot : null;
   }
 
   getActiveShotbotBeltIndex(): number | null {
-    return this.activeShotbotBeltIndex;
+    return this.activeEntries.length > 0 ? this.activeEntries[0].beltIndex : null;
+  }
+
+  getActiveShotbots(): ActiveShotbotEntry[] {
+    return this.activeEntries;
+  }
+
+  getPendingShotbots(): Shotbot[] {
+    return this.pendingShotbots;
   }
 
   getScore(): number {
@@ -71,14 +89,17 @@ export class GameState {
       return null;
     }
 
+    if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
+      return null;
+    }
+
     const shotbot = this.waitingQueues[queueIndex].dequeue();
     if (shotbot === null) {
       return null;
     }
 
     shotbot.state = ShotbotState.Moving;
-    this.activeShotbot = shotbot;
-    this.activeShotbotBeltIndex = 0;
+    this.placeOnBelt(shotbot);
     return shotbot;
   }
 
@@ -87,38 +108,147 @@ export class GameState {
   }
 
   selectFromUsedAt(index: number): Shotbot | null {
+    if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
+      return null;
+    }
+
     const shotbot = this.usedQueue.removeAt(index);
     if (shotbot === null) {
       return null;
     }
 
     shotbot.state = ShotbotState.Moving;
-    this.activeShotbot = shotbot;
-    this.activeShotbotBeltIndex = 0;
+    this.placeOnBelt(shotbot);
     return shotbot;
   }
 
+  private placeOnBelt(shotbot: Shotbot): void {
+    const startIndex = this.findNextAvailablePosition();
+    if (startIndex !== null) {
+      this.activeEntries.push({ shotbot, beltIndex: startIndex, startIndex });
+    } else {
+      this.pendingShotbots.push(shotbot);
+    }
+  }
+
+  private findNextAvailablePosition(): number | null {
+    const beltLength = this.conveyorBelt.getLength();
+    const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
+
+    for (let pos = 0; pos < beltLength; pos++) {
+      if (this.isPositionAvailable(pos, occupied)) {
+        return pos;
+      }
+    }
+    return null;
+  }
+
+  private isPositionAvailable(pos: number, occupied: Set<number>): boolean {
+    const beltLength = this.conveyorBelt.getLength();
+    // Check pos itself and MIN_GAP positions ahead and behind
+    for (let offset = -GameState.MIN_GAP; offset <= GameState.MIN_GAP; offset++) {
+      const checkPos = ((pos + offset) % beltLength + beltLength) % beltLength;
+      if (occupied.has(checkPos)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private tryPlacePending(): void {
+    const toPlace: Shotbot[] = [];
+    const remaining: Shotbot[] = [];
+
+    for (const shotbot of this.pendingShotbots) {
+      const pos = this.findNextAvailablePosition();
+      if (pos !== null && this.activeEntries.length < GameState.MAX_ACTIVE_SHOTBOTS) {
+        this.activeEntries.push({ shotbot, beltIndex: pos, startIndex: pos });
+        toPlace.push(shotbot);
+      } else {
+        remaining.push(shotbot);
+      }
+    }
+    this.pendingShotbots = remaining;
+  }
+
   moveActiveShotbot(): void {
-    if (this.activeShotbot === null || this.activeShotbotBeltIndex === null) {
+    // Legacy: move first active shotbot only
+    if (this.activeEntries.length === 0) return;
+    this.moveSingleEntry(this.activeEntries[0]);
+  }
+
+  moveAllActiveShotbots(): void {
+    // Move all active shotbots
+    const toRemove: number[] = [];
+
+    for (let i = 0; i < this.activeEntries.length; i++) {
+      const entry = this.activeEntries[i];
+      const nextIndex = this.conveyorBelt.getNextIndex(entry.beltIndex);
+
+      if (nextIndex === 0 && entry.beltIndex !== 0) {
+        // Completed loop
+        toRemove.push(i);
+      } else {
+        entry.beltIndex = nextIndex;
+      }
+    }
+
+    // Remove completed shotbots (reverse order to preserve indices)
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      this.deactivateEntry(this.activeEntries[toRemove[i]]);
+      this.activeEntries.splice(toRemove[i], 1);
+    }
+
+    // Try to place pending shotbots
+    this.tryPlacePending();
+  }
+
+  private moveSingleEntry(entry: ActiveShotbotEntry): void {
+    const nextIndex = this.conveyorBelt.getNextIndex(entry.beltIndex);
+
+    if (nextIndex === 0 && entry.beltIndex !== 0) {
+      this.deactivateEntry(entry);
+      const idx = this.activeEntries.indexOf(entry);
+      if (idx !== -1) this.activeEntries.splice(idx, 1);
+      this.tryPlacePending();
       return;
     }
 
-    const nextIndex = this.conveyorBelt.getNextIndex(this.activeShotbotBeltIndex);
-
-    if (nextIndex === 0 && this.activeShotbotBeltIndex !== 0) {
-      this.completeBeltLoop();
-      return;
-    }
-
-    this.activeShotbotBeltIndex = nextIndex;
+    entry.beltIndex = nextIndex;
   }
 
   tryShoot(): boolean {
-    if (this.activeShotbot === null || this.activeShotbotBeltIndex === null) {
-      return false;
+    // Legacy: shoot with first active shotbot
+    if (this.activeEntries.length === 0) return false;
+    return this.tryShootEntry(this.activeEntries[0]);
+  }
+
+  tryShootAll(): boolean[] {
+    const results: boolean[] = [];
+    const toRemove: number[] = [];
+
+    for (let i = 0; i < this.activeEntries.length; i++) {
+      const entry = this.activeEntries[i];
+      const didShoot = this.tryShootEntry(entry);
+      results.push(didShoot);
+
+      if (entry.shotbot.shots === 0) {
+        toRemove.push(i);
+      }
     }
 
-    const beltPos = this.conveyorBelt.getPosition(this.activeShotbotBeltIndex);
+    // Remove depleted shotbots (reverse order)
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      this.deactivateEntry(this.activeEntries[toRemove[i]]);
+      this.activeEntries.splice(toRemove[i], 1);
+    }
+
+    this.tryPlacePending();
+    return results;
+  }
+
+  private tryShootEntry(entry: ActiveShotbotEntry): boolean {
+    const beltPos = this.conveyorBelt.getPosition(entry.beltIndex);
     if (beltPos === null) {
       return false;
     }
@@ -129,22 +259,18 @@ export class GameState {
     }
 
     const targetColor = this.pixelGrid.getBlock(targetPos.x, targetPos.y);
-    if (targetColor !== this.activeShotbot.color) {
+    if (targetColor !== entry.shotbot.color) {
       return false;
     }
 
-    if (this.activeShotbot.shots <= 0) {
+    if (entry.shotbot.shots <= 0) {
       return false;
     }
 
     this.pixelGrid.removeBlock(targetPos.x, targetPos.y);
-    this.activeShotbot.shots--;
+    entry.shotbot.shots--;
     this.lastShotTarget = targetPos;
     this.score++;
-
-    if (this.activeShotbot.shots === 0) {
-      this.deactivateShotbot();
-    }
 
     return true;
   }
@@ -153,21 +279,11 @@ export class GameState {
     return this.pixelGrid.isCleared();
   }
 
-  private deactivateShotbot(): void {
-    if (this.activeShotbot === null) {
-      return;
+  private deactivateEntry(entry: ActiveShotbotEntry): void {
+    if (entry.shotbot.shots > 0) {
+      entry.shotbot.state = ShotbotState.Used;
+      this.usedQueue.enqueue(entry.shotbot);
     }
-
-    if (this.activeShotbot.shots > 0) {
-      this.activeShotbot.state = ShotbotState.Used;
-      this.usedQueue.enqueue(this.activeShotbot);
-    }
-
-    this.activeShotbot = null;
-    this.activeShotbotBeltIndex = null;
   }
 
-  private completeBeltLoop(): void {
-    this.deactivateShotbot();
-  }
 }

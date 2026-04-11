@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GameState } from '@core/game-state';
+import { GameState, ActiveShotbotEntry } from '@core/game-state';
 import { LevelConfig } from '@config/levels';
 import { DifficultyConfig } from '@config/difficulty.config';
 import { Shotbot } from '@core/models/shotbot';
@@ -62,14 +62,13 @@ export class GameScene extends Phaser.Scene {
   private beltTimer: Phaser.Time.TimerEvent | null = null;
   private scoreText!: Phaser.GameObjects.Text;
   private shotsText!: Phaser.GameObjects.Text;
-  private activeShotbotContainer: Phaser.GameObjects.Container | null = null;
+  private activeShotbotContainers: Map<Shotbot, Phaser.GameObjects.Container> = new Map();
+  private shotbotScreenPositions: Map<Shotbot, { x: number; y: number }> = new Map();
   private queueContainers: Phaser.GameObjects.Container[] = [];
   private usedQueueContainer!: Phaser.GameObjects.Container;
   private usedQueueLabel!: Phaser.GameObjects.Text;
-  private shootLine!: Phaser.GameObjects.Graphics;
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
-  private shotbotScreenPos: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor() {
     super({ key: 'GameScene' });
@@ -81,7 +80,8 @@ export class GameScene extends Phaser.Scene {
     this.gameState = new GameState(data.level.grid, data.config);
     this.blockContainers.clear();
     this.queueContainers = [];
-    this.activeShotbotContainer = null;
+    this.activeShotbotContainers.clear();
+    this.shotbotScreenPositions.clear();
     this.beltTimer = null;
   }
 
@@ -109,7 +109,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('WelcomeScene');
     });
 
-    this.shootLine = this.add.graphics();
     this.drawBeltStartMarker();
     this.renderGrid();
 
@@ -383,39 +382,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private selectFromWaiting(queueIndex: number): void {
-    if (this.gameState.getActiveShotbot() !== null) return;
     const shotbot = this.gameState.selectFromWaiting(queueIndex);
     if (shotbot) {
-      this.spawnActiveShotbot();
+      this.spawnActiveShotbot(shotbot);
       this.startBeltMovement();
       this.redrawAllQueues();
     }
   }
 
   private selectFromUsedAt(index: number): void {
-    if (this.gameState.getActiveShotbot() !== null) return;
     const shotbot = this.gameState.selectFromUsedAt(index);
     if (shotbot) {
-      this.spawnActiveShotbot();
+      this.spawnActiveShotbot(shotbot);
       this.startBeltMovement();
       this.redrawAllQueues();
     }
   }
 
-  private spawnActiveShotbot(): void {
-    const shotbot = this.gameState.getActiveShotbot();
-    if (!shotbot) return;
-    const beltIndex = this.gameState.getActiveShotbotBeltIndex() ?? 0;
-    const beltPos = this.gameState.getConveyorBelt().getPosition(beltIndex);
+  private spawnActiveShotbot(shotbot: Shotbot): void {
+    const entry = this.gameState.getActiveShotbots().find(e => e.shotbot === shotbot);
+    if (!entry) return;
+    const beltPos = this.gameState.getConveyorBelt().getPosition(entry.beltIndex);
     if (!beltPos) return;
     const screen = this.beltToScreen(beltPos.x, beltPos.y);
 
-    if (this.activeShotbotContainer) this.activeShotbotContainer.destroy();
+    // Remove old container if exists
+    const oldContainer = this.activeShotbotContainers.get(shotbot);
+    if (oldContainer) oldContainer.destroy();
 
     const color = COLOR_MAP[shotbot.color] ?? 0xffffff;
-    this.activeShotbotContainer = this.add.container(screen.x, screen.y);
-    this.activeShotbotContainer.setDepth(10);
-    this.shotbotScreenPos = { x: screen.x, y: screen.y };
+    const container = this.add.container(screen.x, screen.y);
+    container.setDepth(10);
+    this.activeShotbotContainers.set(shotbot, container);
+    this.shotbotScreenPositions.set(shotbot, { x: screen.x, y: screen.y });
 
     // Face direction: pre-oriented triangle, no rotation
     const grid = this.gameState.getPixelGrid();
@@ -431,15 +430,15 @@ export class GameScene extends Phaser.Scene {
       fontSize: '12px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    this.activeShotbotContainer.add([glow, body, shotsLabel]);
+    container.add([glow, body, shotsLabel]);
 
     this.tweens.add({
-      targets: this.activeShotbotContainer,
+      targets: container,
       scaleX: { from: 0.3, to: 1.2 }, scaleY: { from: 0.3, to: 1.2 },
       duration: 200, ease: 'Back.easeOut',
       onComplete: () => {
         this.tweens.add({
-          targets: this.activeShotbotContainer,
+          targets: container,
           scaleX: 1, scaleY: 1, duration: 100,
         });
       },
@@ -471,84 +470,106 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBeltStep(): void {
-    const didShoot = this.gameState.tryShoot();
-    this.gameState.moveActiveShotbot();
+    const shootResults = this.gameState.tryShootAll();
+    const entries = this.gameState.getActiveShotbots();
 
-    if (didShoot) {
-      this.showShootEffect();
+    // Show shoot effects for each shotbot that fired
+    for (let i = 0; i < shootResults.length; i++) {
+      if (shootResults[i] && entries[i]) {
+        this.showShootEffectFor(entries[i]);
+      }
     }
 
-    if (this.gameState.getActiveShotbot() === null) {
-      this.stopBeltTimer();
-      if (this.activeShotbotContainer) {
-        const container = this.activeShotbotContainer;
-        this.tweens.add({
-          targets: container,
-          alpha: 0, scaleX: 0.2, scaleY: 0.2,
-          duration: 250, ease: 'Cubic.easeIn',
-          onComplete: () => { container.destroy(); },
-        });
-        this.activeShotbotContainer = null;
+    // Track shotbots before move (to detect deactivated ones)
+    const shotbotsBefore = new Set(this.activeShotbotContainers.keys());
+
+    this.gameState.moveAllActiveShotbots();
+
+    // Remove containers for deactivated shotbots
+    for (const shotbot of shotbotsBefore) {
+      if (!this.gameState.getActiveShotbots().some(e => e.shotbot === shotbot)) {
+        const container = this.activeShotbotContainers.get(shotbot);
+        if (container) {
+          this.tweens.add({
+            targets: container,
+            alpha: 0, scaleX: 0.2, scaleY: 0.2,
+            duration: 250, ease: 'Cubic.easeIn',
+            onComplete: () => { container.destroy(); },
+          });
+          this.activeShotbotContainers.delete(shotbot);
+          this.shotbotScreenPositions.delete(shotbot);
+        }
       }
-      this.redrawAllQueues();
-      this.updateScoreDisplay();
+    }
+
+    // Spawn containers for newly placed pending shotbots
+    for (const entry of this.gameState.getActiveShotbots()) {
+      if (!this.activeShotbotContainers.has(entry.shotbot)) {
+        this.spawnActiveShotbot(entry.shotbot);
+      }
+    }
+
+    // Animate remaining shotbots to new positions
+    this.animateAllShotbotsToCurrentPositions();
+
+    this.updateScoreDisplay();
+    this.updateShotsDisplay();
+    this.redrawAllQueues();
+
+    if (this.gameState.getActiveShotbots().length === 0 && this.gameState.getPendingShotbots().length === 0) {
+      this.stopBeltTimer();
       this.shotsText.setText('');
 
       if (this.gameState.isWon()) {
         this.time.delayedCall(500, () => this.showWinScreen());
       }
-    } else {
-      this.animateShotbotToCurrentPosition();
-      this.updateScoreDisplay();
-      this.updateShotsDisplay();
     }
   }
 
-  private animateShotbotToCurrentPosition(): void {
-    const beltIndex = this.gameState.getActiveShotbotBeltIndex();
-    if (beltIndex === null || !this.activeShotbotContainer) return;
-    const beltPos = this.gameState.getConveyorBelt().getPosition(beltIndex);
-    if (!beltPos) return;
-    const screen = this.beltToScreen(beltPos.x, beltPos.y);
-
-    this.shotbotScreenPos = { x: screen.x, y: screen.y };
-
-    this.tweens.add({
-      targets: this.activeShotbotContainer,
-      x: screen.x, y: screen.y,
-      duration: BELT_STEP_MS * 0.6,
-      ease: 'Linear',
-    });
-
-    // Update triangle direction based on current belt edge
+  private animateAllShotbotsToCurrentPositions(): void {
     const grid = this.gameState.getPixelGrid();
-    const dir = faceDirection(beltPos.x, beltPos.y, grid.getWidth(), grid.getHeight());
-    const body = this.activeShotbotContainer.getAt(1) as Phaser.GameObjects.Polygon;
-    if (body) {
-      body.setTo(makeTrianglePoints(SHOTBOT_RADIUS, dir));
-    }
 
-    // Update shots label text
-    const shotbot = this.gameState.getActiveShotbot();
-    if (shotbot) {
-      const shotsLabel = this.activeShotbotContainer.getAt(2) as Phaser.GameObjects.Text;
-      if (shotsLabel) shotsLabel.setText(`${shotbot.shots}`);
+    for (const entry of this.gameState.getActiveShotbots()) {
+      const container = this.activeShotbotContainers.get(entry.shotbot);
+      if (!container) continue;
+
+      const beltPos = this.gameState.getConveyorBelt().getPosition(entry.beltIndex);
+      if (!beltPos) continue;
+      const screen = this.beltToScreen(beltPos.x, beltPos.y);
+
+      this.shotbotScreenPositions.set(entry.shotbot, { x: screen.x, y: screen.y });
+
+      this.tweens.add({
+        targets: container,
+        x: screen.x, y: screen.y,
+        duration: BELT_STEP_MS * 0.6,
+        ease: 'Linear',
+      });
+
+      // Update triangle direction based on current belt edge
+      const dir = faceDirection(beltPos.x, beltPos.y, grid.getWidth(), grid.getHeight());
+      const body = container.getAt(1) as Phaser.GameObjects.Polygon;
+      if (body) {
+        body.setTo(makeTrianglePoints(SHOTBOT_RADIUS, dir));
+      }
+
+      // Update shots label text
+      const shotsLabel = container.getAt(2) as Phaser.GameObjects.Text;
+      if (shotsLabel) shotsLabel.setText(`${entry.shotbot.shots}`);
     }
   }
 
-  private showShootEffect(): void {
-    const shotbot = this.gameState.getActiveShotbot();
+  private showShootEffectFor(entry: ActiveShotbotEntry): void {
     const target = this.gameState.getLastShotTarget();
     if (!target) return;
 
-    // Calculate tip position based on face direction
-    const beltIndex = this.gameState.getActiveShotbotBeltIndex();
-    const beltPos = this.gameState.getConveyorBelt().getPosition(beltIndex ?? 0);
+    const shotbot = entry.shotbot;
+    const beltPos = this.gameState.getConveyorBelt().getPosition(entry.beltIndex);
     const grid = this.gameState.getPixelGrid();
     const dir = beltPos
       ? faceDirection(beltPos.x, beltPos.y, grid.getWidth(), grid.getHeight())
       : 'up';
-    const tipDist = SHOTBOT_RADIUS * 1.6 * 2 / 3; // matches makeTrianglePoints
+    const tipDist = SHOTBOT_RADIUS * 1.6 * 2 / 3;
     let tipOffsetX = 0, tipOffsetY = 0;
     switch (dir) {
       case 'up':    tipOffsetY = -tipDist; break;
@@ -556,25 +577,24 @@ export class GameScene extends Phaser.Scene {
       case 'left':  tipOffsetX = -tipDist; break;
       case 'right': tipOffsetX = tipDist; break;
     }
+    const screenPos = this.shotbotScreenPositions.get(shotbot) ?? { x: 0, y: 0 };
     const from = {
-      x: this.shotbotScreenPos.x + tipOffsetX,
-      y: this.shotbotScreenPos.y + tipOffsetY,
+      x: screenPos.x + tipOffsetX,
+      y: screenPos.y + tipOffsetY,
     };
     const to = this.gridToScreen(target.x, target.y);
-    const color = COLOR_MAP[shotbot?.color ?? 'red'] ?? 0xffffff;
+    const color = COLOR_MAP[shotbot.color] ?? 0xffffff;
 
-    this.shootLine.clear();
-    this.shootLine.setDepth(5);
-    this.shootLine.lineStyle(4, color, 0.9);
-    this.shootLine.lineBetween(from.x, from.y, to.x, to.y);
+    // Create a separate graphics object for each shot line
+    const line = this.add.graphics();
+    line.setDepth(5);
+    line.lineStyle(4, color, 0.9);
+    line.lineBetween(from.x, from.y, to.x, to.y);
 
     this.tweens.add({
-      targets: this.shootLine,
+      targets: line,
       alpha: 0, duration: 200,
-      onComplete: () => {
-        this.shootLine.clear();
-        this.shootLine.setAlpha(1);
-      },
+      onComplete: () => { line.destroy(); },
     });
 
     this.showExplosion(to.x, to.y, color);
@@ -591,9 +611,10 @@ export class GameScene extends Phaser.Scene {
       this.blockContainers.delete(key);
     }
 
-    if (this.activeShotbotContainer) {
+    const container = this.activeShotbotContainers.get(shotbot);
+    if (container) {
       this.tweens.add({
-        targets: this.activeShotbotContainer,
+        targets: container,
         scaleX: 0.8, scaleY: 0.8, duration: 60, yoyo: true, ease: 'Quad.easeOut',
       });
     }
@@ -642,9 +663,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateShotsDisplay(): void {
-    const shotbot = this.gameState.getActiveShotbot();
-    if (shotbot) {
-      this.shotsText.setText(`\u25C9 Shots: ${shotbot.shots}`);
+    const entries = this.gameState.getActiveShotbots();
+    if (entries.length > 0) {
+      const totalShots = entries.reduce((sum, e) => sum + e.shotbot.shots, 0);
+      this.shotsText.setText(`\u25C9 Shots: ${totalShots} (${entries.length} bots)`);
     } else {
       this.shotsText.setText('');
     }
