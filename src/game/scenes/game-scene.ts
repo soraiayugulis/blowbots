@@ -111,7 +111,6 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const grid = this.gameState.getPixelGrid();
 
-    // Calculate dynamic block size so grid + belt fits between bars
     const sidePanelW = SIDE_PANEL_W;
     const usableW = width - sidePanelW - RIGHT_PANEL_W - BELT_PADDING * 2;
     const usableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_CLEARANCE * 2 - SAFE_ZONE * 2;
@@ -124,14 +123,12 @@ export class GameScene extends Phaser.Scene {
 
     const totalGridW = grid.getWidth() * blockSize;
     const totalGridH = grid.getHeight() * blockSize;
-    // Center grid+belt in the space between top bar and bottom panel with safe zone
     const spaceBetweenBars = height - TOP_BAR_H - BOTTOM_PANEL_H - SAFE_ZONE * 2;
     this.gridOffsetX = sidePanelW / 2 + (width - RIGHT_PANEL_W - sidePanelW / 2 - totalGridW) / 2 + 30;
     this.gridOffsetY = TOP_BAR_H + SAFE_ZONE + BELT_CLEARANCE + (spaceBetweenBars - BELT_CLEARANCE * 2 - totalGridH) / 2;
 
     const edgePadding = Math.max(width * EDGE_PADDING_RATIO, 15);
 
-    // Header bar
     this.add.rectangle(width / 2, TOP_BAR_H / 2, width, TOP_BAR_H, 0x0f0f23, 0.9).setDepth(20);
     this.scoreText = this.add.text(width - edgePadding, TOP_BAR_H / 2, 'Score: 0', {
       fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
@@ -510,7 +507,6 @@ export class GameScene extends Phaser.Scene {
 
         this.shotbotScreenPositions.set(shotbot, { x: nextScreen.x, y: nextScreen.y });
 
-        // Process logical movement
         const completedLoop = this.gameState.processShotbotMove(shotbot, nextIndex);
 
         if (completedLoop) {
@@ -524,11 +520,9 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Try to shoot at current position
         const shootResult = this.gameState.tryShootForShotbot(shotbot);
         if (shootResult.didShoot && shootResult.target) {
           this.showShootEffectForShotbot(shotbot, shootResult.target);
-          // Update shots label
           const shotsLabel = container.getAt(1) as Phaser.GameObjects.Text;
           if (shotsLabel) shotsLabel.setText(`${shotbot.shots}`);
           if (shotbot.shots === 0) {
@@ -538,7 +532,6 @@ export class GameScene extends Phaser.Scene {
           }
         }
 
-        // Stop if game ended
         if (this.gameState.isWon()) {
           this.stopBeltTimer();
           this.shotsText.setText('');
@@ -557,7 +550,6 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Continue to next position
         this.startShotbotMovement(shotbot);
       },
     });
@@ -755,27 +747,22 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const score = this.gameState.getScore();
 
-    // Dark overlay
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75);
     overlay.setDepth(20);
 
-    // Congrats text
     const congrats = this.add.text(width / 2, height * 0.25, 'CONGRATULATIONS!', {
       fontSize: '40px', color: '#16c79a', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
     this.addPulsingTextAnimation(congrats);
 
-    // Level name
     this.add.text(width / 2, height * 0.35, this.currentLevel.name, {
       fontSize: '22px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(21);
 
-    // Score
     this.add.text(width / 2, height * 0.45, `Score: ${score}`, {
       fontSize: '32px', color: '#f5a623', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
 
-    // Replay button
     const replayBtn = this.add.text(width / 2, height * 0.6, 'REPLAY', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#16c79a',
@@ -787,7 +774,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('GameScene', { level: this.currentLevel, config: this.currentConfig });
     });
 
-    // Menu button
     const menuBtn = this.add.text(width / 2, height * 0.72, 'MENU', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#4a4a7a',
@@ -799,7 +785,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('WelcomeScene');
     });
 
-    // Celebration particles
     for (let i = 0; i < CELEBRATION_PARTICLE_COUNT; i++) {
       const px = Math.random() * width;
       const py = CELEBRATION_PARTICLE_START_Y;
@@ -827,27 +812,22 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const score = this.gameState.getScore();
 
-    // Dark overlay
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75);
     overlay.setDepth(20);
 
-    // Game Over text
     const gameOver = this.add.text(width / 2, height * 0.25, 'GAME OVER', {
       fontSize: '40px', color: '#e94560', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
     this.addPulsingTextAnimation(gameOver);
 
-    // Level name
     this.add.text(width / 2, height * 0.35, this.currentLevel.name, {
       fontSize: '22px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(21);
 
-    // Score
     this.add.text(width / 2, height * 0.45, `Score: ${score}`, {
       fontSize: '32px', color: '#f5a623', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
 
-    // Replay button
     const replayBtn = this.add.text(width / 2, height * 0.6, 'REPLAY', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#e94560',
@@ -859,7 +839,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('GameScene', { level: this.currentLevel, config: this.currentConfig });
     });
 
-    // Menu button
     const menuBtn = this.add.text(width / 2, height * 0.72, 'MENU', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#4a4a7a',
