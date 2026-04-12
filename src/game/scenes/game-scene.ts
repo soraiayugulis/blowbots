@@ -92,7 +92,12 @@ export class GameScene extends Phaser.Scene {
     const totalGridW = grid.getWidth() * BLOCK_SIZE;
     const totalGridH = grid.getHeight() * BLOCK_SIZE;
     this.gridOffsetX = (width - totalGridW) / 2;
-    this.gridOffsetY = (height - totalGridH) / 2 - 20;
+    // Center grid in the space between header (50px) and bottom panel (100px),
+    // with extra room for belt padding around the grid
+    const topBarH = 50;
+    const bottomPanelH = 100;
+    const availableH = height - topBarH - bottomPanelH;
+    this.gridOffsetY = topBarH + (availableH - totalGridH) / 2;
 
     // Header bar
     this.add.rectangle(width / 2, 25, width, 50, 0x0f0f23, 0.9).setDepth(20);
@@ -168,7 +173,7 @@ export class GameScene extends Phaser.Scene {
     g.setDepth(1);
 
     // Draw line segments between consecutive belt positions
-    g.lineStyle(3, 0x3a3a5c, 0.5);
+    g.lineStyle(6, 0x3a3a5c, 0.5);
     for (let i = 0; i < positions.length; i++) {
       const curr = this.beltToScreen(positions[i].x, positions[i].y);
       const next = this.beltToScreen(positions[(i + 1) % positions.length].x, positions[(i + 1) % positions.length].y);
@@ -229,17 +234,12 @@ export class GameScene extends Phaser.Scene {
     outerRect.setStrokeStyle(2, 0x3a3a5c, 0.7);
     outerRect.setDepth(14);
 
-    // "WAITING" label for the area
-    this.add.text(outerX + outerW / 2, outerY + 8, 'WAITING', {
-      fontSize: '9px', color: '#555577', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(15);
-
     queues.forEach((_queue, index) => {
       const queueX = spacing * (index + 1);
 
-      // Per-queue outline
+      // Per-queue outline — encompasses triangle + number
       const queueW = spacing * 0.7;
-      const queueH = QUEUE_BOT_SIZE + 16;
+      const queueH = QUEUE_BOT_SIZE * 2 + 12;
       const queueOutline = this.add.rectangle(queueX, panelY + 45, queueW, queueH, 0x0f0f23, 0.5);
       queueOutline.setStrokeStyle(1, 0x2a2a4c, 0.6);
       queueOutline.setDepth(15);
@@ -264,10 +264,6 @@ export class GameScene extends Phaser.Scene {
 
     this.usedQueueLabel = this.add.text(usedX, usedCenterY - height * 0.19, 'USED', {
       fontSize: '10px', color: '#777777', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(16);
-
-    this.add.text(usedX, usedCenterY - height * 0.16, 'pick any', {
-      fontSize: '8px', color: '#555555', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(16);
 
     this.usedQueueContainer = this.add.container(usedX, usedCenterY + 10);
@@ -589,7 +585,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: container,
         x: screen.x, y: screen.y,
-        duration: BELT_STEP_MS * 0.6,
+        duration: BELT_STEP_MS * 0.85,
         ease: 'Linear',
       });
 
@@ -650,6 +646,17 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.showExplosion(to.x, to.y, color);
+
+    // White dot in the center of the hit block — brief flash to represent impact
+    const whiteDot = this.add.circle(to.x, to.y, 8, 0xffffff, 0.95);
+    whiteDot.setDepth(8);
+    this.tweens.add({
+      targets: whiteDot,
+      alpha: 0, scaleX: 1.5, scaleY: 1.5,
+      duration: 150,
+      ease: 'Cubic.easeOut',
+      onComplete: () => { whiteDot.destroy(); },
+    });
 
     const key = `${target.x},${target.y}`;
     const blockContainer = this.blockContainers.get(key);
