@@ -1,5 +1,4 @@
 import { RLERow } from './algorithms/rle-expander';
-import { RLEExpander } from './algorithms/rle-expander';
 import { ShotbotDistributor } from './algorithms/shotbot-distributor';
 import { LineOfSight } from './algorithms/line-of-sight';
 import { PixelGrid } from './pixel-grid';
@@ -14,12 +13,7 @@ export interface ActiveShotbotEntry {
   shotbot: Shotbot;
   beltIndex: number;
   startIndex: number;
-}
-
-export interface ShootResult {
-  shotbot: Shotbot;
-  didShoot: boolean;
-  target: Position | null;
+  shotPositions: Set<number>;
 }
 
 export class GameState {
@@ -29,19 +23,18 @@ export class GameState {
   private usedQueue: BoundedQueue<Shotbot>;
   private activeEntries: ActiveShotbotEntry[] = [];
   private pendingShotbots: Shotbot[] = [];
-  private lastShotTarget: Position | null = null;
   private score: number = 0;
   private lost: boolean = false;
 
   private static readonly MAX_ACTIVE_SHOTBOTS = 3;
-  private static readonly MIN_GAP = 2; // minimum positions between shotbots
+  private static readonly MIN_GAP = 2;
 
   constructor(rleGrid: RLERow[][], config: DifficultyConfig) {
     this.pixelGrid = new PixelGrid(rleGrid);
     this.conveyorBelt = new ConveyorBelt(this.pixelGrid.getWidth(), this.pixelGrid.getHeight());
     this.usedQueue = new BoundedQueue<Shotbot>(config.usedQueueCapacity);
 
-    const colorCounts = RLEExpander.countByColor(rleGrid);
+    const colorCounts = this.pixelGrid.countByColor();
     const shotbots = ShotbotDistributor.createShotbots(colorCounts, config.shotUnit);
     this.waitingQueues = ShotbotDistributor.distributeToQueues(shotbots, config.numWaitingQueues);
   }
@@ -62,29 +55,12 @@ export class GameState {
     return this.usedQueue;
   }
 
-  // Legacy single-shotbot accessors (for backward compat)
-  getActiveShotbot(): Shotbot | null {
-    return this.activeEntries.length > 0 ? this.activeEntries[0].shotbot : null;
-  }
-
-  getActiveShotbotBeltIndex(): number | null {
-    return this.activeEntries.length > 0 ? this.activeEntries[0].beltIndex : null;
-  }
-
   getActiveShotbots(): ActiveShotbotEntry[] {
     return this.activeEntries;
   }
 
-  getPendingShotbots(): Shotbot[] {
-    return this.pendingShotbots;
-  }
-
   getScore(): number {
     return this.score;
-  }
-
-  getLastShotTarget(): Position | null {
-    return this.lastShotTarget;
   }
 
   selectFromWaiting(queueIndex: number): Shotbot | null {
@@ -106,10 +82,6 @@ export class GameState {
     return shotbot;
   }
 
-  selectFromUsed(): Shotbot | null {
-    return this.selectFromUsedAt(0);
-  }
-
   selectFromUsedAt(index: number): Shotbot | null {
     if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
       return null;
@@ -126,10 +98,9 @@ export class GameState {
   }
 
   private placeOnBelt(shotbot: Shotbot): void {
-    // New shotbots always enter at START (position 0)
     const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
     if (this.isPositionAvailable(0, occupied)) {
-      this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0 });
+      this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0, shotPositions: new Set() });
     } else {
       this.pendingShotbots.push(shotbot);
     }
@@ -137,7 +108,6 @@ export class GameState {
 
   private isPositionAvailable(pos: number, occupied: Set<number>): boolean {
     const beltLength = this.conveyorBelt.getLength();
-    // Check pos itself and MIN_GAP positions ahead and behind
     for (let offset = -GameState.MIN_GAP; offset <= GameState.MIN_GAP; offset++) {
       const checkPos = ((pos + offset) % beltLength + beltLength) % beltLength;
       if (occupied.has(checkPos)) {
@@ -147,7 +117,7 @@ export class GameState {
     return true;
   }
 
-  private tryPlacePending(): void {
+  tryPlacePending(): void {
     const remaining: Shotbot[] = [];
 
     for (const shotbot of this.pendingShotbots) {
@@ -157,7 +127,7 @@ export class GameState {
       }
       const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
       if (this.isPositionAvailable(0, occupied)) {
-        this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0 });
+        this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0, shotPositions: new Set() });
       } else {
         remaining.push(shotbot);
       }
@@ -165,87 +135,11 @@ export class GameState {
     this.pendingShotbots = remaining;
   }
 
-  moveActiveShotbot(): void {
-    // Legacy: move first active shotbot only
-    if (this.activeEntries.length === 0) return;
-    this.moveSingleEntry(this.activeEntries[0]);
-  }
-
-  moveAllActiveShotbots(): void {
-    // Move all active shotbots
-    const toRemove: number[] = [];
-
-    for (let i = 0; i < this.activeEntries.length; i++) {
-      const entry = this.activeEntries[i];
-      const nextIndex = this.conveyorBelt.getNextIndex(entry.beltIndex);
-
-      if (nextIndex === 0 && entry.beltIndex !== 0) {
-        // Completed loop
-        toRemove.push(i);
-      } else {
-        entry.beltIndex = nextIndex;
-      }
-    }
-
-    // Remove completed shotbots (reverse order to preserve indices)
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      this.deactivateEntry(this.activeEntries[toRemove[i]]);
-      this.activeEntries.splice(toRemove[i], 1);
-    }
-
-    // Try to place pending shotbots
-    this.tryPlacePending();
-  }
-
-  private moveSingleEntry(entry: ActiveShotbotEntry): void {
-    const nextIndex = this.conveyorBelt.getNextIndex(entry.beltIndex);
-
-    if (nextIndex === 0 && entry.beltIndex !== 0) {
-      this.deactivateEntry(entry);
-      const idx = this.activeEntries.indexOf(entry);
-      if (idx !== -1) this.activeEntries.splice(idx, 1);
-      this.tryPlacePending();
-      return;
-    }
-
-    entry.beltIndex = nextIndex;
-  }
-
-  tryShoot(): boolean {
-    // Legacy: shoot with first active shotbot
-    if (this.activeEntries.length === 0) return false;
-    return this.tryShootEntry(this.activeEntries[0]).didShoot;
-  }
-
-  tryShootAll(): boolean[] {
-    return this.tryShootAllWithTargets().map(r => r.didShoot);
-  }
-
-  tryShootAllWithTargets(): ShootResult[] {
-    const results: ShootResult[] = [];
-    const toRemove: number[] = [];
-
-    for (let i = 0; i < this.activeEntries.length; i++) {
-      const entry = this.activeEntries[i];
-      const shootResult = this.tryShootEntry(entry);
-      results.push({ shotbot: entry.shotbot, didShoot: shootResult.didShoot, target: shootResult.target });
-
-      if (shootResult.didShoot && entry.shotbot.shots === 0) {
-        toRemove.push(i);
-      }
-    }
-
-    // Remove depleted shotbots (reverse order)
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      this.deactivateEntry(this.activeEntries[toRemove[i]]);
-      this.activeEntries.splice(toRemove[i], 1);
-    }
-
-    this.tryPlacePending();
-    return results;
-  }
-
   private tryShootEntry(entry: ActiveShotbotEntry): { didShoot: boolean; target: Position | null } {
+    if (entry.shotPositions.has(entry.beltIndex)) {
+      return { didShoot: false, target: null };
+    }
+
     const beltPos = this.conveyorBelt.getPosition(entry.beltIndex);
     if (beltPos === null) {
       return { didShoot: false, target: null };
@@ -262,7 +156,7 @@ export class GameState {
 
     this.pixelGrid.removeBlock(targetPos.x, targetPos.y);
     entry.shotbot.shots--;
-    this.lastShotTarget = targetPos;
+    entry.shotPositions.add(entry.beltIndex);
     this.score++;
 
     return { didShoot: true, target: targetPos };
@@ -276,14 +170,50 @@ export class GameState {
     return this.lost;
   }
 
-  private deactivateEntry(entry: ActiveShotbotEntry): void {
+  private deactivateEntry(entry: ActiveShotbotEntry): boolean {
     if (entry.shotbot.shots > 0) {
       entry.shotbot.state = ShotbotState.Used;
       const enqueued = this.usedQueue.enqueue(entry.shotbot);
       if (!enqueued) {
-        // Used queue is full — game over
         this.lost = true;
+        return false;
       }
+    }
+    return true;
+  }
+
+  processShotbotMove(shotbot: Shotbot, nextBeltIndex: number): boolean {
+    const entry = this.activeEntries.find(e => e.shotbot === shotbot);
+    if (!entry) return false;
+
+    const completedLoop = nextBeltIndex === 0 && entry.beltIndex !== 0;
+
+    if (completedLoop) {
+      const deactivated = this.deactivateEntry(entry);
+      const idx = this.activeEntries.indexOf(entry);
+      if (idx !== -1) this.activeEntries.splice(idx, 1);
+      if (!deactivated) {
+        return true;
+      }
+      this.tryPlacePending();
+      return true;
+    }
+
+    entry.beltIndex = nextBeltIndex;
+    return false;
+  }
+
+  tryShootForShotbot(shotbot: Shotbot): { didShoot: boolean; target: Position | null } {
+    const entry = this.activeEntries.find(e => e.shotbot === shotbot);
+    if (!entry) return { didShoot: false, target: null };
+    return this.tryShootEntry(entry);
+  }
+
+  removeActiveShotbot(shotbot: Shotbot): void {
+    const idx = this.activeEntries.findIndex(e => e.shotbot === shotbot);
+    if (idx !== -1) {
+      this.activeEntries.splice(idx, 1);
+      this.tryPlacePending();
     }
   }
 
