@@ -471,6 +471,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBeltStep(): void {
+    // Track all shotbots before any state changes
+    const shotbotsBeforeShoot = new Set(this.activeShotbotContainers.keys());
+
     const shootResults = this.gameState.tryShootAllWithTargets();
 
     // Show shoot effects for each shotbot that fired (using its own target)
@@ -483,13 +486,30 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Track shotbots before move (to detect deactivated ones)
-    const shotbotsBefore = new Set(this.activeShotbotContainers.keys());
+    // Remove containers for shot-depleted shotbots (removed by tryShootAllWithTargets)
+    for (const shotbot of shotbotsBeforeShoot) {
+      if (!this.gameState.getActiveShotbots().some(e => e.shotbot === shotbot)) {
+        const container = this.activeShotbotContainers.get(shotbot);
+        if (container) {
+          this.tweens.add({
+            targets: container,
+            alpha: 0, scaleX: 0.2, scaleY: 0.2,
+            duration: 250, ease: 'Cubic.easeIn',
+            onComplete: () => { container.destroy(); },
+          });
+          this.activeShotbotContainers.delete(shotbot);
+          this.shotbotScreenPositions.delete(shotbot);
+        }
+      }
+    }
+
+    // Track shotbots before move (to detect loop-completed ones)
+    const shotbotsBeforeMove = new Set(this.activeShotbotContainers.keys());
 
     this.gameState.moveAllActiveShotbots();
 
-    // Remove containers for deactivated shotbots
-    for (const shotbot of shotbotsBefore) {
+    // Remove containers for loop-completed shotbots
+    for (const shotbot of shotbotsBeforeMove) {
       if (!this.gameState.getActiveShotbots().some(e => e.shotbot === shotbot)) {
         const container = this.activeShotbotContainers.get(shotbot);
         if (container) {

@@ -51,10 +51,14 @@ export class LineOfSight {
     let current = beltPos.add(direction);
     while (this.isInBounds(current, grid)) {
       const cell = grid[current.y][current.x];
-      if (cell !== null && cell === color) {
-        return current;
+      if (cell !== null) {
+        // First block in line of sight — shoot only if it matches our color
+        if (cell === color) {
+          return current;
+        }
+        // Wrong-color block blocks line of sight
+        return null;
       }
-      // Skip empty cells and wrong-color blocks — keep looking for own color
       current = current.add(direction);
     }
     return null;

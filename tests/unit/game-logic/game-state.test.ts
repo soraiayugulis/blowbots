@@ -3,6 +3,9 @@ import { GameState, ShootResult } from '@core/game-state';
 import { RLERow } from '@core/algorithms/rle-expander';
 import { DIFFICULTY_CONFIGS } from '@config/difficulty.config';
 import { Shotbot, ShotbotState } from '@core/models/shotbot';
+import { LineOfSight } from '@core/algorithms/line-of-sight';
+import { Position } from '@core/models/position';
+import { Color } from '@core/models/color';
 
 describe('GameState', () => {
   function createEasyLevel(): { rleGrid: RLERow[][]; gameState: GameState } {
@@ -168,37 +171,25 @@ describe('GameState', () => {
       expect(foundColorMatch).toBe(true);
     });
 
-    it('should shoot through wrong-color blocks to hit own color block', () => {
-      // Blue blocks on top row, red below — shotbot should find its color
-      // even when wrong-color blocks are in the way
-      const rleGrid: RLERow[][] = [
-        [{ color: 'blue', count: 3 }],
-        [{ color: 'red', count: 3 }],
-        [{ color: 'red', count: 3 }],
+    it('should not shoot through wrong-color blocks (they block line of sight)', () => {
+      // Directly test LineOfSight: blue at (0,0), red at (0,1)
+      // Red shotbot at top edge (0,-1) looking down should NOT see red block
+      const grid: (Color | null)[][] = [
+        ['blue' as Color, 'blue' as Color, 'blue' as Color],
+        ['red' as Color, 'red' as Color, 'red' as Color],
+        ['red' as Color, 'red' as Color, 'red' as Color],
       ];
-      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+      const beltPos = new Position(0, -1);
 
-      // Place a shotbot
-      const queues = gameState.getWaitingQueues();
-      for (let i = 0; i < queues.length; i++) {
-        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
-      }
+      // findNearestEdgeBlockOfColor for red should return null (blue blocks LOS)
+      const result = LineOfSight.findNearestEdgeBlockOfColor(beltPos, grid, 'red');
+      expect(result).toBeNull();
 
-      // Move around belt and verify shotbot can shoot past wrong-color blocks
-      const beltLength = gameState.getConveyorBelt().getLength();
-      let anyShotFired = false;
-      for (let step = 0; step < beltLength; step++) {
-        const results = gameState.tryShootAllWithTargets();
-        for (const result of results) {
-          if (result.didShoot && result.target) {
-            anyShotFired = true;
-          }
-        }
-        gameState.moveAllActiveShotbots();
-        if (gameState.getActiveShotbots().length === 0) break;
-      }
-      // At least one shotbot should have been able to shoot
-      expect(anyShotFired).toBe(true);
+      // findNearestEdgeBlockOfColor for blue should return (0,0)
+      const blueResult = LineOfSight.findNearestEdgeBlockOfColor(beltPos, grid, 'blue');
+      expect(blueResult).not.toBeNull();
+      expect(blueResult!.x).toBe(0);
+      expect(blueResult!.y).toBe(0);
     });
 
     it('should not show win screen when blocks remain but shotbots are depleted', () => {
@@ -228,6 +219,51 @@ describe('GameState', () => {
         expect(gameState.isWon()).toBe(false);
       }
     });
+
+    it('shotbot with remaining shots should go to used queue after completing belt loop', () => {
+      // Simple grid: only red blocks, place a blue shotbot that can never shoot
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 3 }],
+        [{ color: 'red', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+
+      // Place any shotbot
+      const queues = gameState.getWaitingQueues();
+      let placedShotbot: Shotbot | null = null;
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) {
+          const selected = gameState.selectFromWaiting(i);
+          if (selected) placedShotbot = selected;
+          break;
+        }
+      }
+      expect(placedShotbot).not.toBeNull();
+
+      // If it's a blue shotbot, it can never shoot on this all-red grid
+      if (placedShotbot!.color !== 'red') {
+        const shotsBefore = placedShotbot!.shots;
+        // Run through entire belt loop
+        const beltLength = gameState.getConveyorBelt().getLength();
+        for (let step = 0; step < beltLength + 1; step++) {
+          gameState.tryShootAll();
+          gameState.moveAllActiveShotbots();
+          if (gameState.getActiveShotbots().length === 0) break;
+        }
+
+        // Shotbot should be in used queue with same shots (couldn't shoot)
+        expect(gameState.getUsedQueue().size()).toBeGreaterThan(0);
+        let foundInUsed: Shotbot | null = null;
+        for (let j = 0; j < gameState.getUsedQueue().size(); j++) {
+          const s = gameState.getUsedQueue().getAt(j);
+          if (s && s.color === placedShotbot!.color) { foundInUsed = s; break; }
+        }
+        expect(foundInUsed).not.toBeNull();
+        expect(foundInUsed!.shots).toBe(shotsBefore);
+      }
+    });
+
   });
 
   // Multi-shotbot shooting tests
