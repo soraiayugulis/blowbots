@@ -16,14 +16,15 @@ const COLOR_MAP: Record<string, number> = {
 
 const MAX_BLOCK_SIZE = 50;
 const BELT_PADDING = 35;
-const SHOTBOT_RADIUS = 24;
+const SHOTBOT_RADIUS = 14;
 const TOP_BAR_H = 50;
-const BOTTOM_PANEL_H = 90;
+const BOTTOM_PANEL_H = 40;
 const SIDE_PANEL_W = 110;
+const RIGHT_PANEL_W = 160;
 const BELT_STEP_MS = 600;
 const BELT_SPEED_PPS = 0.15;
-const QUEUE_BOT_SIZE = 32;
-const QUEUE_BOT_SPACING = 34;
+const QUEUE_BOT_SIZE = 18;
+const QUEUE_BOT_SPACING = 28;
 const USED_BOT_SIZE = 28;
 const USED_BOT_SPACING = 30;
 
@@ -33,11 +34,9 @@ const BELT_CLEARANCE = 90;
 
 const BLOCK_MARGIN = 4;
 
-const QUEUE_CONTAINER_Y_OFFSET = 60;
 const USED_PANEL_X = 55;
 const USED_PANEL_WIDTH = 90;
 const USED_PANEL_HEIGHT_RATIO = 0.45;
-const USED_LABEL_Y_OFFSET_RATIO = 0.19;
 
 const HITBOX_PADDING = 10;
 const HITBOX_Y_OFFSET = 5;
@@ -112,9 +111,8 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const grid = this.gameState.getPixelGrid();
 
-    // Calculate dynamic block size so grid + belt fits between bars
     const sidePanelW = SIDE_PANEL_W;
-    const usableW = width - sidePanelW - BELT_PADDING * 2;
+    const usableW = width - sidePanelW - RIGHT_PANEL_W - BELT_PADDING * 2;
     const usableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_CLEARANCE * 2 - SAFE_ZONE * 2;
     const blockSize = Math.min(
       MAX_BLOCK_SIZE,
@@ -125,14 +123,12 @@ export class GameScene extends Phaser.Scene {
 
     const totalGridW = grid.getWidth() * blockSize;
     const totalGridH = grid.getHeight() * blockSize;
-    // Center grid+belt in the space between top bar and bottom panel with safe zone
     const spaceBetweenBars = height - TOP_BAR_H - BOTTOM_PANEL_H - SAFE_ZONE * 2;
-    this.gridOffsetX = sidePanelW / 2 + (width - sidePanelW / 2 - totalGridW) / 2;
+    this.gridOffsetX = sidePanelW / 2 + (width - RIGHT_PANEL_W - sidePanelW / 2 - totalGridW) / 2 + 30;
     this.gridOffsetY = TOP_BAR_H + SAFE_ZONE + BELT_CLEARANCE + (spaceBetweenBars - BELT_CLEARANCE * 2 - totalGridH) / 2;
 
     const edgePadding = Math.max(width * EDGE_PADDING_RATIO, 15);
 
-    // Header bar
     this.add.rectangle(width / 2, TOP_BAR_H / 2, width, TOP_BAR_H, 0x0f0f23, 0.9).setDepth(20);
     this.scoreText = this.add.text(width - edgePadding, TOP_BAR_H / 2, 'Score: 0', {
       fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
@@ -150,17 +146,6 @@ export class GameScene extends Phaser.Scene {
 
     this.drawBeltStartMarker();
     this.renderGrid();
-
-    // Bottom bar w waiting queues
-    const panelY = height - BOTTOM_PANEL_H + SAFE_ZONE;
-    const panelH = BOTTOM_PANEL_H - SAFE_ZONE;
-    this.add.rectangle(width / 2, panelY + panelH / 2, width, panelH, 0x0f0f23, 0.9)
-      .setDepth(15);
-    this.add.rectangle(width / 2, panelY, width, 2, 0x3a3a5c, 0.6)
-      .setDepth(15);
-    this.add.text(width / 2, panelY + 20, 'SELECT A SHOTBOT', {
-      fontSize: '10px', color: '#555555', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(16);
 
     this.renderWaitingQueues();
     this.renderUsedQueue();
@@ -244,16 +229,36 @@ export class GameScene extends Phaser.Scene {
   private renderWaitingQueues(): void {
     const { width, height } = this.cameras.main;
     const queues = this.gameState.getWaitingQueues();
-    const panelY = height - BOTTOM_PANEL_H + SAFE_ZONE;
-    const numQueues = 3;
-    const spacing = width / (numQueues + 1);
+    const numQueues = queues.length;
+
+    const panelCenterX = width - RIGHT_PANEL_W / 2;
+    const panelCenterY = height / 2;
+    const panelH = height * USED_PANEL_HEIGHT_RATIO;
+
+    this.add.rectangle(panelCenterX, panelCenterY, RIGHT_PANEL_W, panelH, 0x0f0f23, 0.9).setDepth(15);
+    this.add.text(panelCenterX, panelCenterY - panelH / 2 - 10, 'WAITING', {
+      fontSize: '10px', color: '#777777', fontFamily: 'monospace',
+    }).setOrigin(0.5, 1).setDepth(16);
+
+    const colW = RIGHT_PANEL_W / numQueues;
+    const colStartY = panelCenterY - panelH / 2 + 30;
     this.queueContainers = [];
 
-    const queuesToRender = queues.slice(0, numQueues);
-    queuesToRender.forEach((_queue, index) => {
-      const queueX = spacing * (index + 1);
+    for (let d = 1; d < numQueues; d++) {
+      const divX = width - RIGHT_PANEL_W + colW * d;
+      const divTop = panelCenterY - panelH / 2;
+      const divBottom = panelCenterY + panelH / 2;
+      const g = this.add.graphics().setDepth(16);
+      g.lineStyle(1, 0x3a3a5c, 0.8);
+      g.beginPath();
+      g.moveTo(divX, divTop + 8);
+      g.lineTo(divX, divBottom - 8);
+      g.strokePath();
+    }
 
-      const container = this.add.container(queueX, panelY + QUEUE_CONTAINER_Y_OFFSET);
+    queues.forEach((_queue, index) => {
+      const colCenterX = width - RIGHT_PANEL_W + colW * index + colW / 2;
+      const container = this.add.container(colCenterX, colStartY);
       container.setDepth(16);
       this.queueContainers.push(container);
       this.redrawQueue(index);
@@ -266,12 +271,13 @@ export class GameScene extends Phaser.Scene {
     const usedCenterY = height / 2;
     const panelWidth = USED_PANEL_WIDTH;
 
-    this.add.rectangle(usedX, usedCenterY, panelWidth, height * USED_PANEL_HEIGHT_RATIO, 0x0f0f23, 0.9)
+    const usedPanelH = height * USED_PANEL_HEIGHT_RATIO;
+    this.add.rectangle(usedX, usedCenterY, panelWidth, usedPanelH, 0x0f0f23, 0.9)
       .setDepth(15);
 
-    this.usedQueueLabel = this.add.text(usedX, usedCenterY - height * USED_LABEL_Y_OFFSET_RATIO, 'USED', {
+    this.usedQueueLabel = this.add.text(usedX, usedCenterY - usedPanelH / 2 - 10, 'USED', {
       fontSize: '10px', color: '#777777', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(16);
+    }).setOrigin(0.5, 1).setDepth(16);
 
     this.usedQueueContainer = this.add.container(usedX, usedCenterY + 10);
     this.usedQueueContainer.setDepth(16);
@@ -293,15 +299,15 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = 0; i < tempItems.length; i++) {
       const shotbot = tempItems[i];
-      const botX = (i - (tempItems.length - 1) / 2) * QUEUE_BOT_SPACING;
+      const botY = i * QUEUE_BOT_SPACING;
       const isFirst = i === 0;
-      this.addQueueBot(container, botX, 0, shotbot, isFirst);
+      this.addQueueBot(container, 0, botY, shotbot, isFirst);
     }
 
     if (tempItems.length > 0) {
-      const hitW = tempItems.length * QUEUE_BOT_SPACING + HITBOX_PADDING;
+      const totalH = tempItems.length * QUEUE_BOT_SPACING + HITBOX_PADDING;
       container.setInteractive(
-        new Phaser.Geom.Rectangle(-hitW / 2, -QUEUE_BOT_SIZE / 2 - HITBOX_Y_OFFSET, hitW, QUEUE_BOT_SIZE + HITBOX_PADDING),
+        new Phaser.Geom.Rectangle(-QUEUE_BOT_SIZE / 2 - HITBOX_Y_OFFSET, -HITBOX_PADDING, QUEUE_BOT_SIZE + HITBOX_PADDING, totalH),
         Phaser.Geom.Rectangle.Contains
       );
       container.off('pointerdown');
@@ -353,19 +359,19 @@ export class GameScene extends Phaser.Scene {
 
     if (isFirst) {
       const diamond = this.add.polygon(0, 0, makeDiamondPoints(botSize / 2), color);
-      diamond.setStrokeStyle(3, 0xffffff, 1);
+      diamond.setStrokeStyle(2, 0xffffff, 1);
       const label = this.add.text(0, 0, `${shotbot.shots}`, {
-        fontSize: '15px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '11px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       }).setOrigin(0.5, 0.5);
       inner.add([diamond, label]);
     } else {
       const diamond = this.add.polygon(0, 0, makeDiamondPoints(botSize / 2), color, LOCKED_SHOTBOT_OPACITY);
-      diamond.setStrokeStyle(1, 0x444444, 0.6);
+      diamond.setStrokeStyle(1, 0x444444, 0.5);
       const label = this.add.text(0, 0, `${shotbot.shots}`, {
-        fontSize: '15px', color: '#888888', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '10px', color: '#666666', fontFamily: 'monospace',
       }).setOrigin(0.5, 0.5);
       const lock = this.add.text(0, -botSize / 2 - LOCK_ICON_Y_OFFSET, '\u{1F512}', {
-        fontSize: '10px', color: '#666666',
+        fontSize: '8px', color: '#555555',
       }).setOrigin(0.5);
       inner.add([diamond, label, lock]);
     }
@@ -501,7 +507,6 @@ export class GameScene extends Phaser.Scene {
 
         this.shotbotScreenPositions.set(shotbot, { x: nextScreen.x, y: nextScreen.y });
 
-        // Process logical movement
         const completedLoop = this.gameState.processShotbotMove(shotbot, nextIndex);
 
         if (completedLoop) {
@@ -515,11 +520,9 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Try to shoot at current position
         const shootResult = this.gameState.tryShootForShotbot(shotbot);
         if (shootResult.didShoot && shootResult.target) {
           this.showShootEffectForShotbot(shotbot, shootResult.target);
-          // Update shots label
           const shotsLabel = container.getAt(1) as Phaser.GameObjects.Text;
           if (shotsLabel) shotsLabel.setText(`${shotbot.shots}`);
           if (shotbot.shots === 0) {
@@ -529,8 +532,16 @@ export class GameScene extends Phaser.Scene {
           }
         }
 
-        // Stop if game ended
-        if (this.gameState.isLost() || this.gameState.isWon()) {
+        if (this.gameState.isWon()) {
+          this.stopBeltTimer();
+          this.shotsText.setText('');
+          this.time.delayedCall(500, () => this.showWinScreen());
+          return;
+        }
+        if (this.gameState.isLost()) {
+          this.stopBeltTimer();
+          this.shotsText.setText('');
+          this.time.delayedCall(500, () => this.showLostScreen());
           return;
         }
 
@@ -539,7 +550,6 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Continue to next position
         this.startShotbotMovement(shotbot);
       },
     });
@@ -737,27 +747,22 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const score = this.gameState.getScore();
 
-    // Dark overlay
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75);
     overlay.setDepth(20);
 
-    // Congrats text
     const congrats = this.add.text(width / 2, height * 0.25, 'CONGRATULATIONS!', {
       fontSize: '40px', color: '#16c79a', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
     this.addPulsingTextAnimation(congrats);
 
-    // Level name
     this.add.text(width / 2, height * 0.35, this.currentLevel.name, {
       fontSize: '22px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(21);
 
-    // Score
     this.add.text(width / 2, height * 0.45, `Score: ${score}`, {
       fontSize: '32px', color: '#f5a623', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
 
-    // Replay button
     const replayBtn = this.add.text(width / 2, height * 0.6, 'REPLAY', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#16c79a',
@@ -769,7 +774,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('GameScene', { level: this.currentLevel, config: this.currentConfig });
     });
 
-    // Menu button
     const menuBtn = this.add.text(width / 2, height * 0.72, 'MENU', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#4a4a7a',
@@ -781,7 +785,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('WelcomeScene');
     });
 
-    // Celebration particles
     for (let i = 0; i < CELEBRATION_PARTICLE_COUNT; i++) {
       const px = Math.random() * width;
       const py = CELEBRATION_PARTICLE_START_Y;
@@ -809,27 +812,22 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const score = this.gameState.getScore();
 
-    // Dark overlay
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75);
     overlay.setDepth(20);
 
-    // Game Over text
     const gameOver = this.add.text(width / 2, height * 0.25, 'GAME OVER', {
       fontSize: '40px', color: '#e94560', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
     this.addPulsingTextAnimation(gameOver);
 
-    // Level name
     this.add.text(width / 2, height * 0.35, this.currentLevel.name, {
       fontSize: '22px', color: '#aaaaaa', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(21);
 
-    // Score
     this.add.text(width / 2, height * 0.45, `Score: ${score}`, {
       fontSize: '32px', color: '#f5a623', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(21);
 
-    // Replay button
     const replayBtn = this.add.text(width / 2, height * 0.6, 'REPLAY', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#e94560',
@@ -841,7 +839,6 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('GameScene', { level: this.currentLevel, config: this.currentConfig });
     });
 
-    // Menu button
     const menuBtn = this.add.text(width / 2, height * 0.72, 'MENU', {
       fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#4a4a7a',

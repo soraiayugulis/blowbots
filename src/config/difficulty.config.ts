@@ -30,7 +30,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     name: 'hard',
     gridSize: 10,
     shotUnit: 5,
-    numWaitingQueues: 4,
+    numWaitingQueues: 3,
     usedQueueCapacity: 3,
     beltSpeed: 1000,
   },
