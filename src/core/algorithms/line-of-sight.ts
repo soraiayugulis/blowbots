@@ -40,6 +40,26 @@ export class LineOfSight {
     return null;
   }
 
+  static findNearestEdgeBlockOfColor(
+    beltPos: Position,
+    grid: (Color | null)[][],
+    color: Color
+  ): Position | null {
+    const direction = this.getInwardDirection(beltPos, grid);
+    if (!direction) return null;
+
+    let current = beltPos.add(direction);
+    while (this.isInBounds(current, grid)) {
+      const cell = grid[current.y][current.x];
+      if (cell !== null && cell === color) {
+        return current;
+      }
+      // Skip empty cells and wrong-color blocks — keep looking for own color
+      current = current.add(direction);
+    }
+    return null;
+  }
+
   private static getDirection(from: Position, to: Position): Position | null {
     const dx = Math.sign(to.x - from.x);
     const dy = Math.sign(to.y - from.y);

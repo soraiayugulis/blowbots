@@ -254,13 +254,8 @@ export class GameState {
       return { didShoot: false, target: null };
     }
 
-    const targetPos = LineOfSight.findNearestEdgeBlock(beltPos, this.pixelGrid.getGrid());
+    const targetPos = LineOfSight.findNearestEdgeBlockOfColor(beltPos, this.pixelGrid.getGrid(), entry.shotbot.color);
     if (targetPos === null) {
-      return { didShoot: false, target: null };
-    }
-
-    const targetColor = this.pixelGrid.getBlock(targetPos.x, targetPos.y);
-    if (targetColor !== entry.shotbot.color) {
       return { didShoot: false, target: null };
     }
 

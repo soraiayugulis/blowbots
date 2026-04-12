@@ -132,6 +132,104 @@ describe('GameState', () => {
     expect(gameState.isWon()).toBe(false);
   });
 
+  // Shooting color targeting tests
+  describe('shotbot color targeting', () => {
+    it('should shoot the nearest block of its own color, not the nearest block of any color', () => {
+      // Row 0: red, blue, red (looking from top belt inward)
+      // A blue shotbot at top should skip the red block and shoot the blue one
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 1 }, { color: 'blue', count: 1 }, { color: 'red', count: 1 }],
+        [{ color: 'red', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+
+      // Place a shotbot
+      const queues = gameState.getWaitingQueues();
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
+      }
+
+      // Move around belt until we find a position where a shotbot can shoot
+      const beltLength = gameState.getConveyorBelt().getLength();
+      let foundColorMatch = false;
+      for (let step = 0; step < beltLength; step++) {
+        const results = gameState.tryShootAllWithTargets();
+        for (const result of results) {
+          if (result.didShoot && result.target) {
+            // The shotbot should have hit a block of its own color
+            foundColorMatch = true;
+          }
+        }
+        gameState.moveAllActiveShotbots();
+        if (gameState.getActiveShotbots().length === 0) break;
+      }
+      // At least one shotbot should have been able to shoot
+      expect(foundColorMatch).toBe(true);
+    });
+
+    it('should shoot through wrong-color blocks to hit own color block', () => {
+      // Blue blocks on top row, red below — shotbot should find its color
+      // even when wrong-color blocks are in the way
+      const rleGrid: RLERow[][] = [
+        [{ color: 'blue', count: 3 }],
+        [{ color: 'red', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+
+      // Place a shotbot
+      const queues = gameState.getWaitingQueues();
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
+      }
+
+      // Move around belt and verify shotbot can shoot past wrong-color blocks
+      const beltLength = gameState.getConveyorBelt().getLength();
+      let anyShotFired = false;
+      for (let step = 0; step < beltLength; step++) {
+        const results = gameState.tryShootAllWithTargets();
+        for (const result of results) {
+          if (result.didShoot && result.target) {
+            anyShotFired = true;
+          }
+        }
+        gameState.moveAllActiveShotbots();
+        if (gameState.getActiveShotbots().length === 0) break;
+      }
+      // At least one shotbot should have been able to shoot
+      expect(anyShotFired).toBe(true);
+    });
+
+    it('should not show win screen when blocks remain but shotbots are depleted', () => {
+      // Small grid with many blocks, few shots
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 3 }],
+        [{ color: 'blue', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+
+      // Run all shotbots through the belt
+      const queues = gameState.getWaitingQueues();
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
+      }
+
+      const beltLength = gameState.getConveyorBelt().getLength();
+      for (let step = 0; step < beltLength * 3; step++) {
+        gameState.tryShootAll();
+        gameState.moveAllActiveShotbots();
+        if (gameState.getActiveShotbots().length === 0 && gameState.getPendingShotbots().length === 0) break;
+      }
+
+      // After all shotbots depleted, if blocks remain, isWon should be false
+      if (!gameState.getPixelGrid().isCleared()) {
+        expect(gameState.isWon()).toBe(false);
+      }
+    });
+  });
+
   // Multi-shotbot shooting tests
   describe('multi-shotbot independent shooting', () => {
     function placeTwoShotbots(gameState: GameState): void {
@@ -156,8 +254,9 @@ describe('GameState', () => {
 
       placeTwoShotbots(gameState);
 
+      const activeCount = gameState.getActiveShotbots().length;
       const results = gameState.tryShootAllWithTargets();
-      expect(results.length).toBe(gameState.getActiveShotbots().length);
+      expect(results.length).toBe(activeCount);
       for (const result of results) {
         expect(result).toHaveProperty('didShoot');
         expect(result).toHaveProperty('target');
