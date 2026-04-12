@@ -539,7 +539,16 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Stop if game ended
-        if (this.gameState.isLost() || this.gameState.isWon()) {
+        if (this.gameState.isWon()) {
+          this.stopBeltTimer();
+          this.shotsText.setText('');
+          this.time.delayedCall(500, () => this.showWinScreen());
+          return;
+        }
+        if (this.gameState.isLost()) {
+          this.stopBeltTimer();
+          this.shotsText.setText('');
+          this.time.delayedCall(500, () => this.showLostScreen());
           return;
         }
 
