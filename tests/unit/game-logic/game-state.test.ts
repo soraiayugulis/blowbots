@@ -48,14 +48,15 @@ describe('GameState', () => {
     expect(shotbot!.state).toBe(ShotbotState.Moving);
   });
 
-  it('should not select from waiting queue when used queue is full', () => {
+  it('should allow selecting from waiting queue even when used queue is full', () => {
     const { gameState } = createEasyLevel();
     const usedQueue = gameState.getUsedQueue();
     for (let i = 0; i < usedQueue.getCapacity(); i++) {
       usedQueue.enqueue({ color: 'red', shots: 1, state: ShotbotState.Used });
     }
+    // User can still place from waiting — game lost only when shotbot tries to return to full used queue
     const shotbot = gameState.selectFromWaiting(0);
-    expect(shotbot).toBeNull();
+    expect(shotbot).not.toBeNull();
   });
 
   it('should select from used queue explicitly', () => {

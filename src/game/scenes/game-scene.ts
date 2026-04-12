@@ -14,9 +14,12 @@ const COLOR_MAP: Record<string, number> = {
   orange: 0xe67e22,
 };
 
-const BLOCK_SIZE = 50;
+const MAX_BLOCK_SIZE = 50;
 const BELT_PADDING = 20; // extra pixels between grid edge and belt
 const SHOTBOT_RADIUS = 20;
+const TOP_BAR_H = 50;
+const BOTTOM_PANEL_H = 100;
+const SIDE_PANEL_W = 110; // used queue panel width
 const BELT_STEP_MS = 600;
 const QUEUE_BOT_SIZE = 28;
 const QUEUE_BOT_SPACING = 34;
@@ -70,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private usedQueueLabel!: Phaser.GameObjects.Text;
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
+  private blockSize: number = MAX_BLOCK_SIZE;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -89,15 +93,21 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.cameras.main;
     const grid = this.gameState.getPixelGrid();
-    const totalGridW = grid.getWidth() * BLOCK_SIZE;
-    const totalGridH = grid.getHeight() * BLOCK_SIZE;
-    this.gridOffsetX = (width - totalGridW) / 2;
-    // Center grid in the space between header (50px) and bottom panel (100px),
-    // with extra room for belt padding around the grid
-    const topBarH = 50;
-    const bottomPanelH = 100;
-    const availableH = height - topBarH - bottomPanelH;
-    this.gridOffsetY = topBarH + (availableH - totalGridH) / 2;
+
+    // Calculate dynamic block size so grid + belt fits between bars
+    const availableW = width - SIDE_PANEL_W - BELT_PADDING * 2;
+    const availableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_PADDING * 2;
+    const blockSize = Math.min(
+      MAX_BLOCK_SIZE,
+      Math.floor(availableW / grid.getWidth()),
+      Math.floor(availableH / grid.getHeight())
+    );
+    this.blockSize = blockSize;
+
+    const totalGridW = grid.getWidth() * blockSize;
+    const totalGridH = grid.getHeight() * blockSize;
+    this.gridOffsetX = SIDE_PANEL_W / 2 + (width - SIDE_PANEL_W / 2 - totalGridW) / 2;
+    this.gridOffsetY = TOP_BAR_H + (availableH + BELT_PADDING * 2 - totalGridH) / 2;
 
     // Header bar
     this.add.rectangle(width / 2, 25, width, 50, 0x0f0f23, 0.9).setDepth(20);
@@ -135,8 +145,8 @@ export class GameScene extends Phaser.Scene {
 
   private gridToScreen(gx: number, gy: number): { x: number; y: number } {
     return {
-      x: this.gridOffsetX + gx * BLOCK_SIZE + BLOCK_SIZE / 2,
-      y: this.gridOffsetY + gy * BLOCK_SIZE + BLOCK_SIZE / 2,
+      x: this.gridOffsetX + gx * this.blockSize + this.blockSize / 2,
+      y: this.gridOffsetY + gy * this.blockSize + this.blockSize / 2,
     };
   }
 
@@ -159,8 +169,8 @@ export class GameScene extends Phaser.Scene {
     // (handled naturally since corner positions have both x and y out of bounds)
 
     return {
-      x: this.gridOffsetX + bx * BLOCK_SIZE + BLOCK_SIZE / 2 + offsetX,
-      y: this.gridOffsetY + by * BLOCK_SIZE + BLOCK_SIZE / 2 + offsetY,
+      x: this.gridOffsetX + bx * this.blockSize + this.blockSize / 2 + offsetX,
+      y: this.gridOffsetY + by * this.blockSize + this.blockSize / 2 + offsetY,
     };
   }
 
@@ -173,18 +183,11 @@ export class GameScene extends Phaser.Scene {
     g.setDepth(1);
 
     // Draw line segments between consecutive belt positions
-    g.lineStyle(6, 0x3a3a5c, 0.5);
+    g.lineStyle(10, 0x3a3a5c, 0.5);
     for (let i = 0; i < positions.length; i++) {
       const curr = this.beltToScreen(positions[i].x, positions[i].y);
       const next = this.beltToScreen(positions[(i + 1) % positions.length].x, positions[(i + 1) % positions.length].y);
       g.lineBetween(curr.x, curr.y, next.x, next.y);
-    }
-
-    // Draw dots at each belt position
-    g.fillStyle(0x5a5a8c, 0.4);
-    for (const pos of positions) {
-      const screen = this.beltToScreen(pos.x, pos.y);
-      g.fillCircle(screen.x, screen.y, 4);
     }
 
     // Green start dot
@@ -208,7 +211,7 @@ export class GameScene extends Phaser.Scene {
         if (color !== null) {
           const screen = this.gridToScreen(x, y);
           const container = this.add.container(screen.x, screen.y);
-          const rect = this.add.rectangle(0, 0, BLOCK_SIZE - 4, BLOCK_SIZE - 4, COLOR_MAP[color] ?? 0xffffff);
+          const rect = this.add.rectangle(0, 0, this.blockSize - 4, this.blockSize - 4, COLOR_MAP[color] ?? 0xffffff);
           rect.setStrokeStyle(2, 0x000000, 0.15);
           container.add(rect);
           this.blockContainers.set(`${x},${y}`, container);
@@ -489,6 +492,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBeltStep(): void {
+    // Guard: stop processing if game is already over
+    if (this.gameState.isLost() || this.gameState.isWon()) {
+      this.stopBeltTimer();
+      return;
+    }
+
     // Track all shotbots before any state changes
     const shotbotsBeforeShoot = new Set(this.activeShotbotContainers.keys());
 
@@ -608,8 +617,8 @@ export class GameScene extends Phaser.Scene {
     const grid = this.gameState.getPixelGrid();
 
     // Determine face direction from screen position relative to grid
-    const gridCenterX = this.gridOffsetX + grid.getWidth() * BLOCK_SIZE / 2;
-    const gridCenterY = this.gridOffsetY + grid.getHeight() * BLOCK_SIZE / 2;
+    const gridCenterX = this.gridOffsetX + grid.getWidth() * this.blockSize / 2;
+    const gridCenterY = this.gridOffsetY + grid.getHeight() * this.blockSize / 2;
     const dx = screenPos.x - gridCenterX;
     const dy = screenPos.y - gridCenterY;
     let dir: 'up' | 'down' | 'left' | 'right';
@@ -699,7 +708,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    const flash = this.add.circle(x, y, BLOCK_SIZE / 2, 0xffffff, 0.5);
+    const flash = this.add.circle(x, y, this.blockSize / 2, 0xffffff, 0.5);
     flash.setDepth(7);
     this.tweens.add({
       targets: flash,

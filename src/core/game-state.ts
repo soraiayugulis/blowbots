@@ -92,10 +92,6 @@ export class GameState {
       return null;
     }
 
-    if (this.usedQueue.isFull()) {
-      return null;
-    }
-
     if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
       return null;
     }
