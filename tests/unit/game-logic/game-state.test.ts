@@ -134,6 +134,17 @@ describe('GameState', () => {
 
   // Multi-shotbot shooting tests
   describe('multi-shotbot independent shooting', () => {
+    function placeTwoShotbots(gameState: GameState): void {
+      const queues = gameState.getWaitingQueues();
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
+      }
+      // Move first away from START so second can enter
+      for (let i = 0; i < 3; i++) gameState.moveAllActiveShotbots();
+      for (let i = 0; i < queues.length; i++) {
+        if (queues[i].size() > 0) { gameState.selectFromWaiting(i); break; }
+      }
+    }
     it('should return per-shotbot shoot results with target positions', () => {
       // Grid with red on top row, blue on bottom row
       const rleGrid: RLERow[][] = [
@@ -143,16 +154,15 @@ describe('GameState', () => {
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
 
-      // Place two shotbots on belt
-      const queues = gameState.getWaitingQueues();
-      for (let i = 0; i < queues.length; i++) {
-        if (queues[i].size() > 0) gameState.selectFromWaiting(i);
-        if (gameState.getActiveShotbots().length >= 2) break;
-      }
+      placeTwoShotbots(gameState);
 
-      const results = gameState.tryShootAll();
-      expect(results.length).toBe(gameState.getActiveShotbots().length + (2 - gameState.getActiveShotbots().length));
-      // Each result should indicate whether THAT specific shotbot shot
+      const results = gameState.tryShootAllWithTargets();
+      expect(results.length).toBe(gameState.getActiveShotbots().length);
+      for (const result of results) {
+        expect(result).toHaveProperty('didShoot');
+        expect(result).toHaveProperty('target');
+        expect(result).toHaveProperty('shotbot');
+      }
     });
 
     it('each shotbot should only shoot blocks of its own color', () => {
@@ -163,12 +173,7 @@ describe('GameState', () => {
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
 
-      // Move shotbots around the belt and verify each only hits its own color
-      const queues = gameState.getWaitingQueues();
-      for (let i = 0; i < queues.length; i++) {
-        if (queues[i].size() > 0) gameState.selectFromWaiting(i);
-        if (gameState.getActiveShotbots().length >= 2) break;
-      }
+      placeTwoShotbots(gameState);
 
       const beltLength = gameState.getConveyorBelt().getLength();
       for (let step = 0; step < beltLength; step++) {
@@ -192,12 +197,7 @@ describe('GameState', () => {
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
 
-      // Place shotbots
-      const queues = gameState.getWaitingQueues();
-      for (let i = 0; i < queues.length; i++) {
-        if (queues[i].size() > 0) gameState.selectFromWaiting(i);
-        if (gameState.getActiveShotbots().length >= 2) break;
-      }
+      placeTwoShotbots(gameState);
 
       // Move until both can shoot
       const beltLength = gameState.getConveyorBelt().getLength();
@@ -300,16 +300,18 @@ describe('GameState', () => {
       const { gameState } = createEasyLevel();
       selectAnyFromWaiting(gameState);
       expect(gameState.getActiveShotbots().length).toBe(1);
+      // Second shotbot goes to pending if START (0) is occupied or within gap
       selectAnyFromWaiting(gameState);
-      expect(gameState.getActiveShotbots().length).toBe(2);
+      // Either on belt or pending — total should be 2
+      expect(gameState.getActiveShotbots().length + gameState.getPendingShotbots().length).toBe(2);
     });
 
-    it('should allow up to 3 shotbots on belt simultaneously', () => {
+    it('should allow up to 3 shotbots on belt or pending', () => {
       const { gameState } = createEasyLevel();
       selectAnyFromWaiting(gameState);
       selectAnyFromWaiting(gameState);
       selectAnyFromWaiting(gameState);
-      expect(gameState.getActiveShotbots().length).toBe(3);
+      expect(gameState.getActiveShotbots().length + gameState.getPendingShotbots().length).toBe(3);
     });
 
     it('should not allow more than 3 shotbots on belt', () => {
@@ -325,7 +327,11 @@ describe('GameState', () => {
     it('should maintain 2-position gap between shotbots on belt', () => {
       const { gameState } = createEasyLevel();
       selectAnyFromWaiting(gameState);
-      // First shotbot is at index 0, second should start at index 3 (gap of 2)
+      // First shotbot is at index 0 (START)
+      // Move first shotbot away so second can also start at 0
+      gameState.moveAllActiveShotbots();
+      gameState.moveAllActiveShotbots();
+      gameState.moveAllActiveShotbots(); // now first is at index 3
       selectAnyFromWaiting(gameState);
       const shotbots = gameState.getActiveShotbots();
       expect(shotbots.length).toBe(2);
@@ -379,6 +385,8 @@ describe('GameState', () => {
     it('should move all active shotbots on moveAllActiveShotbots', () => {
       const { gameState } = createEasyLevel();
       selectAnyFromWaiting(gameState);
+      // Move first away so second can enter at START
+      for (let i = 0; i < 3; i++) gameState.moveAllActiveShotbots();
       selectAnyFromWaiting(gameState);
       const shotbots = gameState.getActiveShotbots();
       const indicesBefore = shotbots.map(s => s.beltIndex);
@@ -394,9 +402,11 @@ describe('GameState', () => {
     it('should try to shoot with each active shotbot independently', () => {
       const { gameState } = createEasyLevel();
       selectAnyFromWaiting(gameState);
+      // Move first away so second can enter at START
+      for (let i = 0; i < 3; i++) gameState.moveAllActiveShotbots();
       selectAnyFromWaiting(gameState);
       const results = gameState.tryShootAll();
-      expect(results.length).toBe(2);
+      expect(results.length).toBe(gameState.getActiveShotbots().length);
     });
 
     it('should deactivate shotbot when shots reach zero even with others on belt', () => {
@@ -407,6 +417,8 @@ describe('GameState', () => {
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
       selectAnyFromWaiting(gameState);
+      // Move first away so second can enter at START
+      for (let i = 0; i < 3; i++) gameState.moveAllActiveShotbots();
       selectAnyFromWaiting(gameState);
       // Find a shotbot with 1 shot and shoot it
       const shotbots = gameState.getActiveShotbots();

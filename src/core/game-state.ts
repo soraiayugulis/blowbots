@@ -129,24 +129,13 @@ export class GameState {
   }
 
   private placeOnBelt(shotbot: Shotbot): void {
-    const startIndex = this.findNextAvailablePosition();
-    if (startIndex !== null) {
-      this.activeEntries.push({ shotbot, beltIndex: startIndex, startIndex });
+    // New shotbots always enter at START (position 0)
+    const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
+    if (this.isPositionAvailable(0, occupied)) {
+      this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0 });
     } else {
       this.pendingShotbots.push(shotbot);
     }
-  }
-
-  private findNextAvailablePosition(): number | null {
-    const beltLength = this.conveyorBelt.getLength();
-    const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
-
-    for (let pos = 0; pos < beltLength; pos++) {
-      if (this.isPositionAvailable(pos, occupied)) {
-        return pos;
-      }
-    }
-    return null;
   }
 
   private isPositionAvailable(pos: number, occupied: Set<number>): boolean {
@@ -162,14 +151,16 @@ export class GameState {
   }
 
   private tryPlacePending(): void {
-    const toPlace: Shotbot[] = [];
     const remaining: Shotbot[] = [];
 
     for (const shotbot of this.pendingShotbots) {
-      const pos = this.findNextAvailablePosition();
-      if (pos !== null && this.activeEntries.length < GameState.MAX_ACTIVE_SHOTBOTS) {
-        this.activeEntries.push({ shotbot, beltIndex: pos, startIndex: pos });
-        toPlace.push(shotbot);
+      if (this.activeEntries.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
+        remaining.push(shotbot);
+        continue;
+      }
+      const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
+      if (this.isPositionAvailable(0, occupied)) {
+        this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0 });
       } else {
         remaining.push(shotbot);
       }
