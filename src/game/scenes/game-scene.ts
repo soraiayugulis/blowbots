@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GameState, ActiveShotbotEntry } from '@core/game-state';
+import { GameState } from '@core/game-state';
 import { LevelConfig } from '@config/levels';
 import { DifficultyConfig } from '@config/difficulty.config';
 import { Shotbot } from '@core/models/shotbot';
@@ -476,13 +476,11 @@ export class GameScene extends Phaser.Scene {
 
     const shootResults = this.gameState.tryShootAllWithTargets();
 
-    // Show shoot effects for each shotbot that fired (using its own target)
+    // Show shoot effects for each shotbot that fired (using result directly,
+    // since the entry may have been removed from activeShotbots if shots depleted)
     for (const result of shootResults) {
       if (result.didShoot && result.target) {
-        const entry = this.gameState.getActiveShotbots().find(e => e.shotbot === result.shotbot);
-        if (entry) {
-          this.showShootEffectFor(entry, result.target);
-        }
+        this.showShootEffectForShotbot(result.shotbot, result.target);
       }
     }
 
@@ -582,13 +580,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private showShootEffectFor(entry: ActiveShotbotEntry, target: Position): void {
-    const shotbot = entry.shotbot;
-    const beltPos = this.gameState.getConveyorBelt().getPosition(entry.beltIndex);
+  private showShootEffectForShotbot(shotbot: Shotbot, target: Position): void {
+    // Find the belt index from the container's current position or screen position
+    const screenPos = this.shotbotScreenPositions.get(shotbot) ?? { x: 0, y: 0 };
     const grid = this.gameState.getPixelGrid();
-    const dir = beltPos
-      ? faceDirection(beltPos.x, beltPos.y, grid.getWidth(), grid.getHeight())
-      : 'up';
+
+    // Determine face direction from screen position relative to grid
+    const gridCenterX = this.gridOffsetX + grid.getWidth() * BLOCK_SIZE / 2;
+    const gridCenterY = this.gridOffsetY + grid.getHeight() * BLOCK_SIZE / 2;
+    const dx = screenPos.x - gridCenterX;
+    const dy = screenPos.y - gridCenterY;
+    let dir: 'up' | 'down' | 'left' | 'right';
+    if (Math.abs(dx) > Math.abs(dy)) {
+      dir = dx > 0 ? 'left' : 'right';
+    } else {
+      dir = dy > 0 ? 'up' : 'down';
+    }
     const tipDist = SHOTBOT_RADIUS * 1.6 * 2 / 3;
     let tipOffsetX = 0, tipOffsetY = 0;
     switch (dir) {
@@ -597,7 +604,6 @@ export class GameScene extends Phaser.Scene {
       case 'left':  tipOffsetX = -tipDist; break;
       case 'right': tipOffsetX = tipDist; break;
     }
-    const screenPos = this.shotbotScreenPositions.get(shotbot) ?? { x: 0, y: 0 };
     const from = {
       x: screenPos.x + tipOffsetX,
       y: screenPos.y + tipOffsetY,
