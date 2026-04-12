@@ -219,8 +219,30 @@ export class GameScene extends Phaser.Scene {
     const spacing = width / (queues.length + 1);
     this.queueContainers = [];
 
+    // Overall waiting area outline — groups all queues
+    const outerPad = 12;
+    const outerX = spacing * 1 - spacing / 2 - outerPad;
+    const outerW = spacing * queues.length + spacing + outerPad * 2;
+    const outerH = QUEUE_BOT_SIZE + 30 + outerPad * 2;
+    const outerY = panelY + 45 - outerH / 2;
+    const outerRect = this.add.rectangle(outerX + outerW / 2, outerY + outerH / 2, outerW, outerH, 0x0a0a1e, 0.6);
+    outerRect.setStrokeStyle(2, 0x3a3a5c, 0.7);
+    outerRect.setDepth(14);
+
+    // "WAITING" label for the area
+    this.add.text(outerX + outerW / 2, outerY + 8, 'WAITING', {
+      fontSize: '9px', color: '#555577', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(15);
+
     queues.forEach((_queue, index) => {
       const queueX = spacing * (index + 1);
+
+      // Per-queue outline
+      const queueW = spacing * 0.7;
+      const queueH = QUEUE_BOT_SIZE + 16;
+      const queueOutline = this.add.rectangle(queueX, panelY + 45, queueW, queueH, 0x0f0f23, 0.5);
+      queueOutline.setStrokeStyle(1, 0x2a2a4c, 0.6);
+      queueOutline.setDepth(15);
 
       const container = this.add.container(queueX, panelY + 45);
       container.setDepth(16);
