@@ -1,5 +1,4 @@
 import { RLERow } from './algorithms/rle-expander';
-import { RLEExpander } from './algorithms/rle-expander';
 import { ShotbotDistributor } from './algorithms/shotbot-distributor';
 import { LineOfSight } from './algorithms/line-of-sight';
 import { PixelGrid } from './pixel-grid';
@@ -10,22 +9,32 @@ import { Shotbot, ShotbotState } from './models/shotbot';
 import { Position } from './models/position';
 import { DifficultyConfig } from '../config/difficulty.config';
 
+export interface ActiveShotbotEntry {
+  shotbot: Shotbot;
+  beltIndex: number;
+  startIndex: number;
+  shotPositions: Set<number>;
+}
+
 export class GameState {
   private pixelGrid: PixelGrid;
   private conveyorBelt: ConveyorBelt;
   private waitingQueues: Queue<Shotbot>[];
   private usedQueue: BoundedQueue<Shotbot>;
-  private activeShotbot: Shotbot | null = null;
-  private activeShotbotBeltIndex: number | null = null;
-  private lastShotTarget: Position | null = null;
+  private activeEntries: ActiveShotbotEntry[] = [];
+  private pendingShotbots: Shotbot[] = [];
   private score: number = 0;
+  private lost: boolean = false;
+
+  private static readonly MAX_ACTIVE_SHOTBOTS = 3;
+  private static readonly MIN_GAP = 2;
 
   constructor(rleGrid: RLERow[][], config: DifficultyConfig) {
     this.pixelGrid = new PixelGrid(rleGrid);
     this.conveyorBelt = new ConveyorBelt(this.pixelGrid.getWidth(), this.pixelGrid.getHeight());
     this.usedQueue = new BoundedQueue<Shotbot>(config.usedQueueCapacity);
 
-    const colorCounts = RLEExpander.countByColor(rleGrid);
+    const colorCounts = this.pixelGrid.countByColor();
     const shotbots = ShotbotDistributor.createShotbots(colorCounts, config.shotUnit);
     this.waitingQueues = ShotbotDistributor.distributeToQueues(shotbots, config.numWaitingQueues);
   }
@@ -46,20 +55,12 @@ export class GameState {
     return this.usedQueue;
   }
 
-  getActiveShotbot(): Shotbot | null {
-    return this.activeShotbot;
-  }
-
-  getActiveShotbotBeltIndex(): number | null {
-    return this.activeShotbotBeltIndex;
+  getActiveShotbots(): ActiveShotbotEntry[] {
+    return this.activeEntries;
   }
 
   getScore(): number {
     return this.score;
-  }
-
-  getLastShotTarget(): Position | null {
-    return this.lastShotTarget;
   }
 
   selectFromWaiting(queueIndex: number): Shotbot | null {
@@ -67,7 +68,7 @@ export class GameState {
       return null;
     }
 
-    if (this.usedQueue.isFull()) {
+    if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
       return null;
     }
 
@@ -77,97 +78,143 @@ export class GameState {
     }
 
     shotbot.state = ShotbotState.Moving;
-    this.activeShotbot = shotbot;
-    this.activeShotbotBeltIndex = 0;
+    this.placeOnBelt(shotbot);
     return shotbot;
   }
 
-  selectFromUsed(): Shotbot | null {
-    return this.selectFromUsedAt(0);
-  }
-
   selectFromUsedAt(index: number): Shotbot | null {
+    if (this.activeEntries.length + this.pendingShotbots.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
+      return null;
+    }
+
     const shotbot = this.usedQueue.removeAt(index);
     if (shotbot === null) {
       return null;
     }
 
     shotbot.state = ShotbotState.Moving;
-    this.activeShotbot = shotbot;
-    this.activeShotbotBeltIndex = 0;
+    this.placeOnBelt(shotbot);
     return shotbot;
   }
 
-  moveActiveShotbot(): void {
-    if (this.activeShotbot === null || this.activeShotbotBeltIndex === null) {
-      return;
+  private placeOnBelt(shotbot: Shotbot): void {
+    const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
+    if (this.isPositionAvailable(0, occupied)) {
+      this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0, shotPositions: new Set() });
+    } else {
+      this.pendingShotbots.push(shotbot);
     }
-
-    const nextIndex = this.conveyorBelt.getNextIndex(this.activeShotbotBeltIndex);
-
-    if (nextIndex === 0 && this.activeShotbotBeltIndex !== 0) {
-      this.completeBeltLoop();
-      return;
-    }
-
-    this.activeShotbotBeltIndex = nextIndex;
   }
 
-  tryShoot(): boolean {
-    if (this.activeShotbot === null || this.activeShotbotBeltIndex === null) {
-      return false;
+  private isPositionAvailable(pos: number, occupied: Set<number>): boolean {
+    const beltLength = this.conveyorBelt.getLength();
+    for (let offset = -GameState.MIN_GAP; offset <= GameState.MIN_GAP; offset++) {
+      const checkPos = ((pos + offset) % beltLength + beltLength) % beltLength;
+      if (occupied.has(checkPos)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  tryPlacePending(): void {
+    const remaining: Shotbot[] = [];
+
+    for (const shotbot of this.pendingShotbots) {
+      if (this.activeEntries.length >= GameState.MAX_ACTIVE_SHOTBOTS) {
+        remaining.push(shotbot);
+        continue;
+      }
+      const occupied = new Set(this.activeEntries.map(e => e.beltIndex));
+      if (this.isPositionAvailable(0, occupied)) {
+        this.activeEntries.push({ shotbot, beltIndex: 0, startIndex: 0, shotPositions: new Set() });
+      } else {
+        remaining.push(shotbot);
+      }
+    }
+    this.pendingShotbots = remaining;
+  }
+
+  private tryShootEntry(entry: ActiveShotbotEntry): { didShoot: boolean; target: Position | null } {
+    if (entry.shotPositions.has(entry.beltIndex)) {
+      return { didShoot: false, target: null };
     }
 
-    const beltPos = this.conveyorBelt.getPosition(this.activeShotbotBeltIndex);
+    const beltPos = this.conveyorBelt.getPosition(entry.beltIndex);
     if (beltPos === null) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
-    const targetPos = LineOfSight.findNearestEdgeBlock(beltPos, this.pixelGrid.getGrid());
+    const targetPos = LineOfSight.findNearestEdgeBlockOfColor(beltPos, this.pixelGrid.getGrid(), entry.shotbot.color);
     if (targetPos === null) {
-      return false;
+      return { didShoot: false, target: null };
     }
 
-    const targetColor = this.pixelGrid.getBlock(targetPos.x, targetPos.y);
-    if (targetColor !== this.activeShotbot.color) {
-      return false;
-    }
-
-    if (this.activeShotbot.shots <= 0) {
-      return false;
+    if (entry.shotbot.shots <= 0) {
+      return { didShoot: false, target: null };
     }
 
     this.pixelGrid.removeBlock(targetPos.x, targetPos.y);
-    this.activeShotbot.shots--;
-    this.lastShotTarget = targetPos;
+    entry.shotbot.shots--;
+    entry.shotPositions.add(entry.beltIndex);
     this.score++;
 
-    if (this.activeShotbot.shots === 0) {
-      this.deactivateShotbot();
-    }
-
-    return true;
+    return { didShoot: true, target: targetPos };
   }
 
   isWon(): boolean {
     return this.pixelGrid.isCleared();
   }
 
-  private deactivateShotbot(): void {
-    if (this.activeShotbot === null) {
-      return;
-    }
-
-    if (this.activeShotbot.shots > 0) {
-      this.activeShotbot.state = ShotbotState.Used;
-      this.usedQueue.enqueue(this.activeShotbot);
-    }
-
-    this.activeShotbot = null;
-    this.activeShotbotBeltIndex = null;
+  isLost(): boolean {
+    return this.lost;
   }
 
-  private completeBeltLoop(): void {
-    this.deactivateShotbot();
+  private deactivateEntry(entry: ActiveShotbotEntry): boolean {
+    if (entry.shotbot.shots > 0) {
+      entry.shotbot.state = ShotbotState.Used;
+      const enqueued = this.usedQueue.enqueue(entry.shotbot);
+      if (!enqueued) {
+        this.lost = true;
+        return false;
+      }
+    }
+    return true;
   }
+
+  processShotbotMove(shotbot: Shotbot, nextBeltIndex: number): boolean {
+    const entry = this.activeEntries.find(e => e.shotbot === shotbot);
+    if (!entry) return false;
+
+    const completedLoop = nextBeltIndex === 0 && entry.beltIndex !== 0;
+
+    if (completedLoop) {
+      const deactivated = this.deactivateEntry(entry);
+      const idx = this.activeEntries.indexOf(entry);
+      if (idx !== -1) this.activeEntries.splice(idx, 1);
+      if (!deactivated) {
+        return true;
+      }
+      this.tryPlacePending();
+      return true;
+    }
+
+    entry.beltIndex = nextBeltIndex;
+    return false;
+  }
+
+  tryShootForShotbot(shotbot: Shotbot): { didShoot: boolean; target: Position | null } {
+    const entry = this.activeEntries.find(e => e.shotbot === shotbot);
+    if (!entry) return { didShoot: false, target: null };
+    return this.tryShootEntry(entry);
+  }
+
+  removeActiveShotbot(shotbot: Shotbot): void {
+    const idx = this.activeEntries.findIndex(e => e.shotbot === shotbot);
+    if (idx !== -1) {
+      this.activeEntries.splice(idx, 1);
+      this.tryPlacePending();
+    }
+  }
+
 }

@@ -2,50 +2,28 @@ import { Position } from '../models/position';
 import { Color } from '../models/color';
 
 export class LineOfSight {
-  static hasLineOfSight(
+  static findNearestEdgeBlockOfColor(
     beltPos: Position,
-    blockPos: Position,
-    grid: (Color | null)[][]
-  ): boolean {
-    const direction = this.getDirection(beltPos, blockPos);
-    if (!direction) return false;
-
-    let current = beltPos.add(direction);
-    while (!current.equals(blockPos)) {
-      if (!this.isInBounds(current, grid)) {
-        return false;
-      }
-      if (grid[current.y][current.x] !== null) {
-        return false;
-      }
-      current = current.add(direction);
-    }
-    return true;
-  }
-
-  static findNearestEdgeBlock(
-    beltPos: Position,
-    grid: (Color | null)[][]
+    grid: (Color | null)[][],
+    color: Color
   ): Position | null {
     const direction = this.getInwardDirection(beltPos, grid);
     if (!direction) return null;
 
     let current = beltPos.add(direction);
     while (this.isInBounds(current, grid)) {
-      if (grid[current.y][current.x] !== null) {
-        return current;
+      const cell = grid[current.y][current.x];
+      if (cell !== null) {
+        // First block in line of sight — shoot only if it matches our color
+        if (cell === color) {
+          return current;
+        }
+        // Wrong-color block blocks line of sight
+        return null;
       }
       current = current.add(direction);
     }
     return null;
-  }
-
-  private static getDirection(from: Position, to: Position): Position | null {
-    const dx = Math.sign(to.x - from.x);
-    const dy = Math.sign(to.y - from.y);
-    if (dx !== 0 && dy !== 0) return null;
-    if (dx === 0 && dy === 0) return null;
-    return new Position(dx, dy);
   }
 
   private static getInwardDirection(

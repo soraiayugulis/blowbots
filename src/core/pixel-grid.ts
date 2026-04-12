@@ -3,11 +3,9 @@ import { RLEExpander, RLERow } from './algorithms/rle-expander';
 
 export class PixelGrid {
   private grid: (Color | null)[][];
-  private totalBlockCount: number;
 
   constructor(rleGrid: RLERow[][]) {
     this.grid = RLEExpander.expand(rleGrid);
-    this.totalBlockCount = this.countRemaining();
   }
 
   getWidth(): number {
@@ -44,15 +42,7 @@ export class PixelGrid {
   }
 
   isCleared(): boolean {
-    return this.remainingBlocks() === 0;
-  }
-
-  totalBlocks(): number {
-    return this.totalBlockCount;
-  }
-
-  remainingBlocks(): number {
-    return this.countRemaining();
+    return this.countRemaining() === 0;
   }
 
   getGrid(): (Color | null)[][] {

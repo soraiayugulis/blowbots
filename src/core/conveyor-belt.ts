@@ -1,5 +1,8 @@
 import { Position } from './models/position';
 
+const STEPS_PER_EDGE_MULTIPLIER = 2; // multiplier for steps per edge calculation
+const BELT_EDGE_OFFSET = 1; // offset for belt edge positions
+
 export class ConveyorBelt {
   private positions: Position[];
 
@@ -22,10 +25,6 @@ export class ConveyorBelt {
     return (currentIndex + 1) % this.positions.length;
   }
 
-  isCompleteLoop(startIndex: number, currentIndex: number): boolean {
-    return startIndex === currentIndex;
-  }
-
   getLength(): number {
     return this.positions.length;
   }
@@ -33,26 +32,38 @@ export class ConveyorBelt {
   private generatePerimeter(width: number, height: number): Position[] {
     const positions: Position[] = [];
 
-    // Top edge: left to right (y = -1)
-    for (let x = 0; x < width; x++) {
-      positions.push(new Position(x, -1));
+    const stepsPerEdge = Math.max(width, height) * STEPS_PER_EDGE_MULTIPLIER;
+
+    for (let i = 0; i <= stepsPerEdge; i++) {
+      const x = -BELT_EDGE_OFFSET + (width + BELT_EDGE_OFFSET) * (i / stepsPerEdge);
+      positions.push(new Position(Math.round(x), -BELT_EDGE_OFFSET));
     }
 
-    // Right edge: top to bottom (x = width)
-    for (let y = 0; y < height; y++) {
-      positions.push(new Position(width, y));
+    for (let i = 1; i <= stepsPerEdge; i++) {
+      const y = -BELT_EDGE_OFFSET + (height + BELT_EDGE_OFFSET) * (i / stepsPerEdge);
+      positions.push(new Position(width, Math.round(y)));
     }
 
-    // Bottom edge: right to left (y = height)
-    for (let x = width - 1; x >= 0; x--) {
-      positions.push(new Position(x, height));
+    for (let i = 1; i <= stepsPerEdge; i++) {
+      const x = width - (width + BELT_EDGE_OFFSET) * (i / stepsPerEdge);
+      positions.push(new Position(Math.round(x), height));
     }
 
-    // Left edge: bottom to top (x = -1)
-    for (let y = height - 1; y >= 0; y--) {
-      positions.push(new Position(-1, y));
+    for (let i = 1; i < stepsPerEdge; i++) {
+      const y = height - (height + BELT_EDGE_OFFSET) * (i / stepsPerEdge);
+      positions.push(new Position(-BELT_EDGE_OFFSET, Math.round(y)));
     }
 
-    return positions;
+    // Deduplicate positions rounded to the same coordinates
+    const unique: Position[] = [];
+    const seen = new Set<string>();
+    for (const pos of positions) {
+      const key = `${pos.x},${pos.y}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(pos);
+      }
+    }
+    return unique;
   }
 }
