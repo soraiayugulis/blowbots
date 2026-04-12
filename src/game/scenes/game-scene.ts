@@ -543,6 +543,8 @@ export class GameScene extends Phaser.Scene {
 
       if (this.gameState.isWon()) {
         this.time.delayedCall(500, () => this.showWinScreen());
+      } else if (this.gameState.isLost()) {
+        this.time.delayedCall(500, () => this.showLostScreen());
       }
     }
   }
@@ -781,5 +783,67 @@ export class GameScene extends Phaser.Scene {
         },
       });
     }
+  }
+
+  private showLostScreen(): void {
+    const { width, height } = this.cameras.main;
+    const score = this.gameState.getScore();
+
+    // Dark overlay
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75);
+    overlay.setDepth(20);
+
+    // Game Over text
+    const gameOver = this.add.text(width / 2, height * 0.25, 'GAME OVER', {
+      fontSize: '40px', color: '#e94560', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(21);
+    this.tweens.add({
+      targets: gameOver,
+      scaleX: 1.08, scaleY: 1.08, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+
+    // Level name
+    this.add.text(width / 2, height * 0.35, this.currentLevel.name, {
+      fontSize: '22px', color: '#aaaaaa', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(21);
+
+    // Score
+    this.add.text(width / 2, height * 0.45, `Score: ${score}`, {
+      fontSize: '32px', color: '#f5a623', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(21);
+
+    // Replay button
+    const replayBtn = this.add.text(width / 2, height * 0.6, 'REPLAY', {
+      fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#e94560',
+      padding: { x: 30, y: 12 },
+    }).setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
+
+    replayBtn.on('pointerover', () => {
+      this.tweens.add({ targets: replayBtn, scaleX: 1.05, scaleY: 1.05, duration: 80 });
+    });
+    replayBtn.on('pointerout', () => {
+      this.tweens.add({ targets: replayBtn, scaleX: 1, scaleY: 1, duration: 80 });
+    });
+    replayBtn.on('pointerdown', () => {
+      this.scene.start('GameScene', { level: this.currentLevel, config: this.currentConfig });
+    });
+
+    // Menu button
+    const menuBtn = this.add.text(width / 2, height * 0.72, 'MENU', {
+      fontSize: '24px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#4a4a7a',
+      padding: { x: 30, y: 12 },
+    }).setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
+
+    menuBtn.on('pointerover', () => {
+      this.tweens.add({ targets: menuBtn, scaleX: 1.05, scaleY: 1.05, duration: 80 });
+    });
+    menuBtn.on('pointerout', () => {
+      this.tweens.add({ targets: menuBtn, scaleX: 1, scaleY: 1, duration: 80 });
+    });
+    menuBtn.on('pointerdown', () => {
+      this.scene.start('WelcomeScene');
+    });
   }
 }

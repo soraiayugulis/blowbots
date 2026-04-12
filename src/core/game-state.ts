@@ -275,10 +275,24 @@ export class GameState {
     return this.pixelGrid.isCleared();
   }
 
+  isLost(): boolean {
+    if (this.pixelGrid.isCleared()) return false;
+    // Game is lost if no shotbots are available anywhere
+    const hasActive = this.activeEntries.length > 0;
+    const hasPending = this.pendingShotbots.length > 0;
+    const hasWaiting = this.waitingQueues.some(q => !q.isEmpty());
+    const hasUsed = !this.usedQueue.isEmpty();
+    return !hasActive && !hasPending && !hasWaiting && !hasUsed;
+  }
+
   private deactivateEntry(entry: ActiveShotbotEntry): void {
     if (entry.shotbot.shots > 0) {
       entry.shotbot.state = ShotbotState.Used;
-      this.usedQueue.enqueue(entry.shotbot);
+      const enqueued = this.usedQueue.enqueue(entry.shotbot);
+      if (!enqueued) {
+        // Used queue is full — shotbot is lost (triggers game over)
+        entry.shotbot.state = ShotbotState.Used;
+      }
     }
   }
 

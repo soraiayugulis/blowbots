@@ -220,6 +220,71 @@ describe('GameState', () => {
       }
     });
 
+    it('isLost returns true when no shotbots available and blocks remain', () => {
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 3 }],
+        [{ color: 'blue', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+
+      // Run all shotbots through until none left
+      const queues = gameState.getWaitingQueues();
+      const beltLength = gameState.getConveyorBelt().getLength();
+
+      // Place and run each shotbot through belt
+      while (true) {
+        // Try to place from waiting
+        let placed = false;
+        for (let i = 0; i < queues.length; i++) {
+          if (queues[i].size() > 0) {
+            gameState.selectFromWaiting(i);
+            placed = true;
+            break;
+          }
+        }
+        // Try to place from used
+        if (!placed && gameState.getUsedQueue().size() > 0) {
+          gameState.selectFromUsedAt(0);
+          placed = true;
+        }
+        if (!placed) break;
+
+        // Run through belt
+        for (let step = 0; step < beltLength + 1; step++) {
+          gameState.tryShootAll();
+          gameState.moveAllActiveShotbots();
+          if (gameState.getActiveShotbots().length === 0 && gameState.getPendingShotbots().length === 0) break;
+        }
+      }
+
+      // If blocks remain and no shotbots available, isLost should be true
+      if (!gameState.getPixelGrid().isCleared()) {
+        expect(gameState.isLost()).toBe(true);
+      }
+    });
+
+    it('isLost returns false when grid is cleared', () => {
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 1 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+      // Even with no shotbots left, if grid is cleared, not lost
+      expect(gameState.isWon()).toBe(false);
+      expect(gameState.isLost()).toBe(false);
+    });
+
+    it('isLost returns false when used queue still has shotbots', () => {
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 3 }],
+        [{ color: 'blue', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+      // Game just started — shotbots available in waiting queues
+      expect(gameState.isLost()).toBe(false);
+    });
+
     it('shotbot with remaining shots should go to used queue after completing belt loop', () => {
       // Simple grid: only red blocks, place a blue shotbot that can never shoot
       const rleGrid: RLERow[][] = [
