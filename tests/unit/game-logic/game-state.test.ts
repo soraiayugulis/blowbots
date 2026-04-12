@@ -220,7 +220,9 @@ describe('GameState', () => {
       }
     });
 
-    it('isLost returns true when no shotbots available and blocks remain', () => {
+    it('isLost returns true when used queue overflows', () => {
+      // Easy config: usedQueueCapacity = 3
+      // Fill used queue to capacity, then trigger a deactivation
       const rleGrid: RLERow[][] = [
         [{ color: 'red', count: 3 }],
         [{ color: 'blue', count: 3 }],
@@ -228,13 +230,13 @@ describe('GameState', () => {
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
 
-      // Run all shotbots through until none left
+      // Fill used queue to capacity by running shotbots through
       const queues = gameState.getWaitingQueues();
       const beltLength = gameState.getConveyorBelt().getLength();
 
-      // Place and run each shotbot through belt
-      while (true) {
-        // Try to place from waiting
+      // Run shotbots until used queue is full
+      let usedFull = false;
+      for (let round = 0; round < 10 && !usedFull; round++) {
         let placed = false;
         for (let i = 0; i < queues.length; i++) {
           if (queues[i].size() > 0) {
@@ -243,25 +245,47 @@ describe('GameState', () => {
             break;
           }
         }
-        // Try to place from used
         if (!placed && gameState.getUsedQueue().size() > 0) {
           gameState.selectFromUsedAt(0);
           placed = true;
         }
         if (!placed) break;
 
-        // Run through belt
         for (let step = 0; step < beltLength + 1; step++) {
           gameState.tryShootAll();
           gameState.moveAllActiveShotbots();
           if (gameState.getActiveShotbots().length === 0 && gameState.getPendingShotbots().length === 0) break;
         }
+        usedFull = gameState.getUsedQueue().isFull();
       }
 
-      // If blocks remain and no shotbots available, isLost should be true
-      if (!gameState.getPixelGrid().isCleared()) {
+      // Now place 3 shotbots from used onto belt, then run them through
+      // to overflow the used queue when they try to return
+      if (usedFull) {
+        // Place all 3 from used
+        while (gameState.getUsedQueue().size() > 0) {
+          gameState.selectFromUsedAt(0);
+        }
+
+        // Run them through belt — when they complete, used queue will overflow
+        for (let step = 0; step < beltLength + 2; step++) {
+          gameState.tryShootAll();
+          gameState.moveAllActiveShotbots();
+          if (gameState.isLost()) break;
+        }
+
         expect(gameState.isLost()).toBe(true);
       }
+    });
+
+    it('isLost returns false at game start', () => {
+      const rleGrid: RLERow[][] = [
+        [{ color: 'red', count: 3 }],
+        [{ color: 'blue', count: 3 }],
+        [{ color: 'red', count: 3 }],
+      ];
+      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
+      expect(gameState.isLost()).toBe(false);
     });
 
     it('isLost returns false when grid is cleared', () => {
@@ -269,19 +293,6 @@ describe('GameState', () => {
         [{ color: 'red', count: 1 }],
       ];
       const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
-      // Even with no shotbots left, if grid is cleared, not lost
-      expect(gameState.isWon()).toBe(false);
-      expect(gameState.isLost()).toBe(false);
-    });
-
-    it('isLost returns false when used queue still has shotbots', () => {
-      const rleGrid: RLERow[][] = [
-        [{ color: 'red', count: 3 }],
-        [{ color: 'blue', count: 3 }],
-        [{ color: 'red', count: 3 }],
-      ];
-      const gameState = new GameState(rleGrid, DIFFICULTY_CONFIGS.easy);
-      // Game just started — shotbots available in waiting queues
       expect(gameState.isLost()).toBe(false);
     });
 

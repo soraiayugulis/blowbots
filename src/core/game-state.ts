@@ -31,6 +31,7 @@ export class GameState {
   private pendingShotbots: Shotbot[] = [];
   private lastShotTarget: Position | null = null;
   private score: number = 0;
+  private lost: boolean = false;
 
   private static readonly MAX_ACTIVE_SHOTBOTS = 3;
   private static readonly MIN_GAP = 2; // minimum positions between shotbots
@@ -276,13 +277,7 @@ export class GameState {
   }
 
   isLost(): boolean {
-    if (this.pixelGrid.isCleared()) return false;
-    // Game is lost if no shotbots are available anywhere
-    const hasActive = this.activeEntries.length > 0;
-    const hasPending = this.pendingShotbots.length > 0;
-    const hasWaiting = this.waitingQueues.some(q => !q.isEmpty());
-    const hasUsed = !this.usedQueue.isEmpty();
-    return !hasActive && !hasPending && !hasWaiting && !hasUsed;
+    return this.lost;
   }
 
   private deactivateEntry(entry: ActiveShotbotEntry): void {
@@ -290,8 +285,8 @@ export class GameState {
       entry.shotbot.state = ShotbotState.Used;
       const enqueued = this.usedQueue.enqueue(entry.shotbot);
       if (!enqueued) {
-        // Used queue is full — shotbot is lost (triggers game over)
-        entry.shotbot.state = ShotbotState.Used;
+        // Used queue is full — game over
+        this.lost = true;
       }
     }
   }

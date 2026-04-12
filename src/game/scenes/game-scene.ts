@@ -537,14 +537,16 @@ export class GameScene extends Phaser.Scene {
     this.updateShotsDisplay();
     this.redrawAllQueues();
 
-    if (this.gameState.getActiveShotbots().length === 0 && this.gameState.getPendingShotbots().length === 0) {
+    if (this.gameState.isLost()) {
+      this.stopBeltTimer();
+      this.shotsText.setText('');
+      this.time.delayedCall(500, () => this.showLostScreen());
+    } else if (this.gameState.getActiveShotbots().length === 0 && this.gameState.getPendingShotbots().length === 0) {
       this.stopBeltTimer();
       this.shotsText.setText('');
 
       if (this.gameState.isWon()) {
         this.time.delayedCall(500, () => this.showWinScreen());
-      } else if (this.gameState.isLost()) {
-        this.time.delayedCall(500, () => this.showLostScreen());
       }
     }
   }
