@@ -16,15 +16,15 @@ const COLOR_MAP: Record<string, number> = {
 
 const MAX_BLOCK_SIZE = 50;
 const BELT_PADDING = 35;
-const SHOTBOT_RADIUS = 24;
+const SHOTBOT_RADIUS = 14;
 const TOP_BAR_H = 50;
 const BOTTOM_PANEL_H = 40;
 const SIDE_PANEL_W = 110;
 const RIGHT_PANEL_W = 160;
 const BELT_STEP_MS = 600;
 const BELT_SPEED_PPS = 0.15;
-const QUEUE_BOT_SIZE = 32;
-const QUEUE_BOT_SPACING = 34;
+const QUEUE_BOT_SIZE = 18;
+const QUEUE_BOT_SPACING = 28;
 const USED_BOT_SIZE = 28;
 const USED_BOT_SPACING = 30;
 
@@ -362,19 +362,19 @@ export class GameScene extends Phaser.Scene {
 
     if (isFirst) {
       const diamond = this.add.polygon(0, 0, makeDiamondPoints(botSize / 2), color);
-      diamond.setStrokeStyle(3, 0xffffff, 1);
+      diamond.setStrokeStyle(2, 0xffffff, 1);
       const label = this.add.text(0, 0, `${shotbot.shots}`, {
-        fontSize: '15px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '11px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
       }).setOrigin(0.5, 0.5);
       inner.add([diamond, label]);
     } else {
       const diamond = this.add.polygon(0, 0, makeDiamondPoints(botSize / 2), color, LOCKED_SHOTBOT_OPACITY);
-      diamond.setStrokeStyle(1, 0x444444, 0.6);
+      diamond.setStrokeStyle(1, 0x444444, 0.5);
       const label = this.add.text(0, 0, `${shotbot.shots}`, {
-        fontSize: '15px', color: '#888888', fontFamily: 'monospace', fontStyle: 'bold',
+        fontSize: '10px', color: '#666666', fontFamily: 'monospace',
       }).setOrigin(0.5, 0.5);
       const lock = this.add.text(0, -botSize / 2 - LOCK_ICON_Y_OFFSET, '\u{1F512}', {
-        fontSize: '10px', color: '#666666',
+        fontSize: '8px', color: '#555555',
       }).setOrigin(0.5);
       inner.add([diamond, label, lock]);
     }
