@@ -17,4 +17,9 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [WelcomeScene, GameScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// Ensure Phaser resizes when the window resizes
+window.addEventListener('resize', () => {
+  game.scale.resize(window.innerWidth, window.innerHeight);
+});

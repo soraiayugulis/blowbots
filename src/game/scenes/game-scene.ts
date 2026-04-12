@@ -95,19 +95,22 @@ export class GameScene extends Phaser.Scene {
     const grid = this.gameState.getPixelGrid();
 
     // Calculate dynamic block size so grid + belt fits between bars
-    const availableW = width - SIDE_PANEL_W - BELT_PADDING * 2;
-    const availableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_PADDING * 2;
+    // Belt extends BELT_PADDING beyond grid on all sides
+    const usableW = width - SIDE_PANEL_W - BELT_PADDING * 2;
+    const usableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_PADDING * 2;
     const blockSize = Math.min(
       MAX_BLOCK_SIZE,
-      Math.floor(availableW / grid.getWidth()),
-      Math.floor(availableH / grid.getHeight())
+      Math.floor(usableW / grid.getWidth()),
+      Math.floor(usableH / grid.getHeight())
     );
     this.blockSize = blockSize;
 
     const totalGridW = grid.getWidth() * blockSize;
     const totalGridH = grid.getHeight() * blockSize;
+    // Center grid+belt in the space between top bar and bottom panel
+    const spaceBetweenBars = height - TOP_BAR_H - BOTTOM_PANEL_H;
     this.gridOffsetX = SIDE_PANEL_W / 2 + (width - SIDE_PANEL_W / 2 - totalGridW) / 2;
-    this.gridOffsetY = TOP_BAR_H + (availableH + BELT_PADDING * 2 - totalGridH) / 2;
+    this.gridOffsetY = TOP_BAR_H + (spaceBetweenBars - totalGridH) / 2;
 
     // Header bar
     this.add.rectangle(width / 2, 25, width, 50, 0x0f0f23, 0.9).setDepth(20);
@@ -182,12 +185,19 @@ export class GameScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.setDepth(1);
 
-    // Draw line segments between consecutive belt positions
-    g.lineStyle(10, 0x3a3a5c, 0.5);
+    // Draw thick line segments between consecutive belt positions
+    g.lineStyle(14, 0x3a3a5c, 0.5);
     for (let i = 0; i < positions.length; i++) {
       const curr = this.beltToScreen(positions[i].x, positions[i].y);
       const next = this.beltToScreen(positions[(i + 1) % positions.length].x, positions[(i + 1) % positions.length].y);
       g.lineBetween(curr.x, curr.y, next.x, next.y);
+    }
+
+    // Rounded joints at each belt position
+    g.fillStyle(0x3a3a5c, 0.5);
+    for (const pos of positions) {
+      const screen = this.beltToScreen(pos.x, pos.y);
+      g.fillCircle(screen.x, screen.y, 7);
     }
 
     // Green start dot
