@@ -126,7 +126,7 @@ export class GameScene extends Phaser.Scene {
     const totalGridH = grid.getHeight() * blockSize;
     // Center grid+belt in the space between top bar and bottom panel with safe zone
     const spaceBetweenBars = height - TOP_BAR_H - BOTTOM_PANEL_H - SAFE_ZONE * 2;
-    this.gridOffsetX = sidePanelW / 2 + (width - sidePanelW / 2 - totalGridW) / 2;
+    this.gridOffsetX = sidePanelW / 2 + (width - RIGHT_PANEL_W - sidePanelW / 2 - totalGridW) / 2 + 30;
     this.gridOffsetY = TOP_BAR_H + SAFE_ZONE + BELT_CLEARANCE + (spaceBetweenBars - BELT_CLEARANCE * 2 - totalGridH) / 2;
 
     const edgePadding = Math.max(width * EDGE_PADDING_RATIO, 15);
