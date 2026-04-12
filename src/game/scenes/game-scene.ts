@@ -18,8 +18,9 @@ const MAX_BLOCK_SIZE = 50;
 const BELT_PADDING = 35;
 const SHOTBOT_RADIUS = 24;
 const TOP_BAR_H = 50;
-const BOTTOM_PANEL_H = 90;
+const BOTTOM_PANEL_H = 40;
 const SIDE_PANEL_W = 110;
+const RIGHT_PANEL_W = 160;
 const BELT_STEP_MS = 600;
 const BELT_SPEED_PPS = 0.15;
 const QUEUE_BOT_SIZE = 32;
@@ -33,11 +34,9 @@ const BELT_CLEARANCE = 90;
 
 const BLOCK_MARGIN = 4;
 
-const QUEUE_CONTAINER_Y_OFFSET = 60;
 const USED_PANEL_X = 55;
 const USED_PANEL_WIDTH = 90;
 const USED_PANEL_HEIGHT_RATIO = 0.45;
-const USED_LABEL_Y_OFFSET_RATIO = 0.19;
 
 const HITBOX_PADDING = 10;
 const HITBOX_Y_OFFSET = 5;
@@ -114,7 +113,7 @@ export class GameScene extends Phaser.Scene {
 
     // Calculate dynamic block size so grid + belt fits between bars
     const sidePanelW = SIDE_PANEL_W;
-    const usableW = width - sidePanelW - BELT_PADDING * 2;
+    const usableW = width - sidePanelW - RIGHT_PANEL_W - BELT_PADDING * 2;
     const usableH = height - TOP_BAR_H - BOTTOM_PANEL_H - BELT_CLEARANCE * 2 - SAFE_ZONE * 2;
     const blockSize = Math.min(
       MAX_BLOCK_SIZE,
@@ -150,17 +149,6 @@ export class GameScene extends Phaser.Scene {
 
     this.drawBeltStartMarker();
     this.renderGrid();
-
-    // Bottom bar w waiting queues
-    const panelY = height - BOTTOM_PANEL_H + SAFE_ZONE;
-    const panelH = BOTTOM_PANEL_H - SAFE_ZONE;
-    this.add.rectangle(width / 2, panelY + panelH / 2, width, panelH, 0x0f0f23, 0.9)
-      .setDepth(15);
-    this.add.rectangle(width / 2, panelY, width, 2, 0x3a3a5c, 0.6)
-      .setDepth(15);
-    this.add.text(width / 2, panelY + 20, 'SELECT A SHOTBOT', {
-      fontSize: '10px', color: '#555555', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(16);
 
     this.renderWaitingQueues();
     this.renderUsedQueue();
@@ -244,16 +232,36 @@ export class GameScene extends Phaser.Scene {
   private renderWaitingQueues(): void {
     const { width, height } = this.cameras.main;
     const queues = this.gameState.getWaitingQueues();
-    const panelY = height - BOTTOM_PANEL_H + SAFE_ZONE;
-    const numQueues = 3;
-    const spacing = width / (numQueues + 1);
+    const numQueues = queues.length;
+
+    const panelCenterX = width - RIGHT_PANEL_W / 2;
+    const panelCenterY = height / 2;
+    const panelH = height * USED_PANEL_HEIGHT_RATIO;
+
+    this.add.rectangle(panelCenterX, panelCenterY, RIGHT_PANEL_W, panelH, 0x0f0f23, 0.9).setDepth(15);
+    this.add.text(panelCenterX, panelCenterY - panelH / 2 - 10, 'WAITING', {
+      fontSize: '10px', color: '#777777', fontFamily: 'monospace',
+    }).setOrigin(0.5, 1).setDepth(16);
+
+    const colW = RIGHT_PANEL_W / numQueues;
+    const colStartY = panelCenterY - panelH / 2 + 30;
     this.queueContainers = [];
 
-    const queuesToRender = queues.slice(0, numQueues);
-    queuesToRender.forEach((_queue, index) => {
-      const queueX = spacing * (index + 1);
+    for (let d = 1; d < numQueues; d++) {
+      const divX = width - RIGHT_PANEL_W + colW * d;
+      const divTop = panelCenterY - panelH / 2;
+      const divBottom = panelCenterY + panelH / 2;
+      const g = this.add.graphics().setDepth(16);
+      g.lineStyle(1, 0x3a3a5c, 0.8);
+      g.beginPath();
+      g.moveTo(divX, divTop + 8);
+      g.lineTo(divX, divBottom - 8);
+      g.strokePath();
+    }
 
-      const container = this.add.container(queueX, panelY + QUEUE_CONTAINER_Y_OFFSET);
+    queues.forEach((_queue, index) => {
+      const colCenterX = width - RIGHT_PANEL_W + colW * index + colW / 2;
+      const container = this.add.container(colCenterX, colStartY);
       container.setDepth(16);
       this.queueContainers.push(container);
       this.redrawQueue(index);
@@ -266,12 +274,13 @@ export class GameScene extends Phaser.Scene {
     const usedCenterY = height / 2;
     const panelWidth = USED_PANEL_WIDTH;
 
-    this.add.rectangle(usedX, usedCenterY, panelWidth, height * USED_PANEL_HEIGHT_RATIO, 0x0f0f23, 0.9)
+    const usedPanelH = height * USED_PANEL_HEIGHT_RATIO;
+    this.add.rectangle(usedX, usedCenterY, panelWidth, usedPanelH, 0x0f0f23, 0.9)
       .setDepth(15);
 
-    this.usedQueueLabel = this.add.text(usedX, usedCenterY - height * USED_LABEL_Y_OFFSET_RATIO, 'USED', {
+    this.usedQueueLabel = this.add.text(usedX, usedCenterY - usedPanelH / 2 - 10, 'USED', {
       fontSize: '10px', color: '#777777', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(16);
+    }).setOrigin(0.5, 1).setDepth(16);
 
     this.usedQueueContainer = this.add.container(usedX, usedCenterY + 10);
     this.usedQueueContainer.setDepth(16);
@@ -293,15 +302,15 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = 0; i < tempItems.length; i++) {
       const shotbot = tempItems[i];
-      const botX = (i - (tempItems.length - 1) / 2) * QUEUE_BOT_SPACING;
+      const botY = i * QUEUE_BOT_SPACING;
       const isFirst = i === 0;
-      this.addQueueBot(container, botX, 0, shotbot, isFirst);
+      this.addQueueBot(container, 0, botY, shotbot, isFirst);
     }
 
     if (tempItems.length > 0) {
-      const hitW = tempItems.length * QUEUE_BOT_SPACING + HITBOX_PADDING;
+      const totalH = tempItems.length * QUEUE_BOT_SPACING + HITBOX_PADDING;
       container.setInteractive(
-        new Phaser.Geom.Rectangle(-hitW / 2, -QUEUE_BOT_SIZE / 2 - HITBOX_Y_OFFSET, hitW, QUEUE_BOT_SIZE + HITBOX_PADDING),
+        new Phaser.Geom.Rectangle(-QUEUE_BOT_SIZE / 2 - HITBOX_Y_OFFSET, -HITBOX_PADDING, QUEUE_BOT_SIZE + HITBOX_PADDING, totalH),
         Phaser.Geom.Rectangle.Contains
       );
       container.off('pointerdown');
