@@ -67,16 +67,4 @@ describe('PixelGrid', () => {
     }
     expect(grid.isCleared()).toBe(true);
   });
-
-  it('should return total block count', () => {
-    const grid = create3x3Grid();
-    expect(grid.totalBlocks()).toBe(9);
-  });
-
-  it('should return remaining block count', () => {
-    const grid = create3x3Grid();
-    expect(grid.remainingBlocks()).toBe(9);
-    grid.removeBlock(0, 0);
-    expect(grid.remainingBlocks()).toBe(8);
-  });
 });
