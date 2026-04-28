@@ -1,4 +1,4 @@
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
 
 export interface DifficultyConfig {
   name: Difficulty;
@@ -31,6 +31,14 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, DifficultyConfig> = {
     gridSize: 10,
     shotUnit: 5,
     numWaitingQueues: 3,
+    usedQueueCapacity: 3,
+    beltSpeed: 1000,
+  },
+  extreme: {
+    name: 'extreme',
+    gridSize: 15,
+    shotUnit: 25,
+    numWaitingQueues: 4,
     usedQueueCapacity: 3,
     beltSpeed: 1000,
   },

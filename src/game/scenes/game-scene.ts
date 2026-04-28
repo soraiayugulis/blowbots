@@ -12,6 +12,9 @@ const COLOR_MAP: Record<string, number> = {
   yellow: 0xf5a623,
   purple: 0x9b59b6,
   orange: 0xe67e22,
+  black: 0x222222,
+  white: 0xf0f0f0,
+  brown: 0x8b4513,
 };
 
 const MAX_BLOCK_SIZE = 50;
